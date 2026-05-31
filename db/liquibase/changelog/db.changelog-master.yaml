@@ -1,0 +1,8 @@
+databaseChangeLog:
+  - include:
+      file: changelog/000-auth-identity-schema.sql
+  - include:
+      file: changelog/001-core-finance-schema.sql
+  - include:
+      file: changelog/002-phase-3-core-feature-support.sql
+

@@ -1,0 +1,72 @@
+import { formatDate, formatMoney, monthRange } from '../lib/financeFormat';
+import { useDashboardSummary } from '../services/dashboardService';
+
+export function DashboardPage() {
+  const currentMonth = monthRange();
+  const { summary, loading, error } = useDashboardSummary(currentMonth.from, currentMonth.to);
+
+  return (
+    <section className="page">
+      <header className="page-header">
+        <div>
+          <h1 className="page-title">Dashboard</h1>
+          <p className="page-subtitle">
+            Current period: {currentMonth.from} to {currentMonth.to}
+          </p>
+        </div>
+      </header>
+
+      {error && <div className="notice error">{error.message}</div>}
+      {loading && <div className="panel">Loading dashboard...</div>}
+
+      <div className="metric-grid">
+        <Metric label="Income" value={formatMoney(summary?.totalIncome ?? 0)} />
+        <Metric label="Expenses" value={formatMoney(summary?.totalExpenses ?? 0)} />
+        <Metric label="Net cash flow" value={formatMoney(summary?.netCashFlow ?? 0)} />
+        <Metric label="Liquid balance" value={formatMoney(summary?.totalLiquidBalance ?? 0)} />
+      </div>
+
+      <div className="panel">
+        <div className="panel-header">
+          <h2>Recent Transactions</h2>
+          <span>{summary?.pendingReminderCount ?? 0} reminders</span>
+        </div>
+        {summary && summary.recentTransactions.length === 0 && <p>No recent transactions.</p>}
+        {summary && summary.recentTransactions.length > 0 && (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Description</th>
+                  <th>Type</th>
+                  <th>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.recentTransactions.map((transaction) => (
+                  <tr key={transaction.id}>
+                    <td>{formatDate(transaction.date)}</td>
+                    <td>{transaction.description}</td>
+                    <td>{transaction.type}</td>
+                    <td>{formatMoney(transaction.amount, transaction.currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="metric">
+      <div className="metric-label">{label}</div>
+      <div className="metric-value">{value}</div>
+    </div>
+  );
+}
+

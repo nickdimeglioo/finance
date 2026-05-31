@@ -1,0 +1,7 @@
+insert_type,id,title,description,status,priority,effort,scope,phase
+insert,,"FT-P4-0001 Initialize SqlMapper runtime","Registered mapper startup initialization for underscore mapping, finance connection defaults, DateOnly/TimeOnly, and JSON/JSONB handlers.",5,1,2,Backend,"Pass 4 follow-ups"
+insert,,"FT-P4-0002 Route finance data session through SqlMapper","Moved finance raw query/execute operations behind OrmMapper helpers so services keep using the finance data contract instead of direct Dapper calls.",5,1,3,Backend,"Pass 4 follow-ups"
+insert,,"FT-P4-0003 Fix DateOnly query parameters","Normalized transaction and dashboard date filters to PostgreSQL-compatible date parameters while retaining DateOnly DTOs.",5,1,1,Backend,"Pass 4 follow-ups"
+insert,,"FT-P4-0004 Upgrade task tracker CLI API","Added command-style list/get/add/update/delete/upload/export/stats operations and upload mutation support with insert_type.",5,2,3,Agent,"Pass 4 follow-ups"
+insert,,"FT-P4-0005 Add task tracker skill","Documented the task tracker API workflow in task-tracker/SKILL.md for future agents.",5,2,1,Agent,"Pass 4 follow-ups"
+insert,,"FT-P4-0006 Update agent conventions","Updated AGENTS.md with SqlMapper runtime rules and the new pass-specific task CSV mutation schema.",5,2,1,Agent,"Pass 4 follow-ups"

@@ -1,0 +1,38 @@
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FinanceTracker.Api", "server\FinanceTracker.Api\FinanceTracker.Api.csproj", "{47D8A610-D8A7-40BF-A17A-512E2AC61F51}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SqlMapper", "server\SqlMapper\SqlMapper.csproj", "{5171F092-CBC2-7F1C-FFD5-34DE0B40697B}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "server", "server", "{25B02C9A-B096-4CDC-AB84-6C57844DB0D1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FinanceTracker.Data.Contracts", "server\FinanceTracker.Data.Contracts\FinanceTracker.Data.Contracts.csproj", "{C7EC5C32-D0E0-4C54-A28A-B0A74605203D}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{47D8A610-D8A7-40BF-A17A-512E2AC61F51}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{47D8A610-D8A7-40BF-A17A-512E2AC61F51}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{47D8A610-D8A7-40BF-A17A-512E2AC61F51}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{47D8A610-D8A7-40BF-A17A-512E2AC61F51}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5171F092-CBC2-7F1C-FFD5-34DE0B40697B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5171F092-CBC2-7F1C-FFD5-34DE0B40697B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5171F092-CBC2-7F1C-FFD5-34DE0B40697B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5171F092-CBC2-7F1C-FFD5-34DE0B40697B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C7EC5C32-D0E0-4C54-A28A-B0A74605203D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C7EC5C32-D0E0-4C54-A28A-B0A74605203D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C7EC5C32-D0E0-4C54-A28A-B0A74605203D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C7EC5C32-D0E0-4C54-A28A-B0A74605203D}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{C7EC5C32-D0E0-4C54-A28A-B0A74605203D} = {25B02C9A-B096-4CDC-AB84-6C57844DB0D1}
+	EndGlobalSection
+EndGlobal

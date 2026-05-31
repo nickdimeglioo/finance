@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: finance-tracker-postgres
+    environment:
+      POSTGRES_DB: finance_tracker
+      POSTGRES_USER: finance
+      POSTGRES_PASSWORD: finance-dev-password
+    ports:
+      - "5438:5432"
+    volumes:
+      - finance-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finance -d finance_tracker"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: finance-tracker-minio
+    command: server /data --console-address ":9011"
+    environment:
+      MINIO_ROOT_USER: finance
+      MINIO_ROOT_PASSWORD: finance-minio-password
+    ports:
+      - "9010:9000"
+      - "9011:9011"
+    volumes:
+      - finance-minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  finance-postgres-data:
+  finance-minio-data:
+

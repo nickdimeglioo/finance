@@ -1,0 +1,65 @@
+Completed task ledger
+=====================
+
+Pass 1
+------
+FT-0001 - Review planning docs
+FT-0002 - Inspect reusable pipeline template
+FT-0003 - Create finance agent instructions
+FT-0004 - Create setup README
+FT-0005 - Add git hygiene files
+FT-0006 - Initialize local git repository
+FT-0007 - Create task board CSV
+
+Pass 2
+------
+FT-0101 - Scaffold repository structure
+FT-0102 - Scaffold ASP.NET Core API
+FT-0103 - Scaffold React frontend
+FT-0104 - Configure local services
+FT-0105 - Wire reusable auth, completed as a development-compatible auth bridge; final shared-auth swap is tracked as FT-P2-0001
+FT-0106 - Wire object storage
+FT-0107 - Add health endpoint
+FT-0108 - Create frontend route shell
+FT-0201 - Configure Liquibase
+FT-0202 - Create core finance schema
+FT-0203 - Create finance domain models
+FT-0204 - Create account and transaction DTOs
+FT-0205 - Create service layer skeleton
+FT-0206 - Create frontend finance contracts
+FT-0207 - Create API service hooks
+FT-0208 - Create money and date utilities
+
+Open follow-up tasks introduced in pass 2
+----------------------------------------
+FT-P2-0001 - Swap development auth bridge for reusable auth
+FT-P2-0003 - Run Liquibase against local database
+
+Pass 3
+------
+FT-P2-0002 - Install Node and verify frontend build
+FT-0301 - Build accounts API
+FT-0302 - Build accounts UI
+FT-0303 - Build transactions API
+FT-0304 - Build transfer API
+FT-0305 - Build transactions UI
+FT-0306 - Build split transaction support, backend complete; richer split editor UI remains a future enhancement
+FT-0307 - Build dashboard summary
+FT-P3-0001 - Create finance data contract project
+FT-P3-0002 - Move SqlMapper to in-repo reference
+FT-P3-0003 - Add ASP.NET identity Liquibase baseline
+FT-P3-0004 - Add transaction direction support
+
+Open follow-up tasks introduced in pass 3
+----------------------------------------
+FT-P3-0005 - Run Liquibase against local database
+FT-P3-0006 - Resolve locked Debug build outputs
+
+Pass 4
+------
+FT-P4-0001 - Initialize SqlMapper runtime
+FT-P4-0002 - Route finance data session through SqlMapper
+FT-P4-0003 - Fix DateOnly query parameters
+FT-P4-0004 - Upgrade task tracker CLI API
+FT-P4-0005 - Add task tracker skill
+FT-P4-0006 - Update agent conventions
