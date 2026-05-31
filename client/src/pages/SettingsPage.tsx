@@ -1,3 +1,5 @@
+import { EmptyState } from '../components/ui';
+
 export function SettingsPage() {
   return (
     <section className="page">
@@ -7,8 +9,9 @@ export function SettingsPage() {
           <p className="page-subtitle">Profile, categories, tags, import rules, classification rules, and account settings.</p>
         </div>
       </header>
-      <div className="panel">Shared account settings and finance-specific configuration will be grouped here.</div>
+      <div className="panel">
+        <EmptyState title="Settings workspace" message="Shared account settings and finance-specific configuration will be grouped here." />
+      </div>
     </section>
   );
 }
-

@@ -10,7 +10,9 @@ using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
 
-SqlMapperRuntime.Configure(builder);
+var databaseOptions = builder.Configuration
+    .GetSection(DatabaseOptions.SectionName)
+    .Get<DatabaseOptions>() ?? new DatabaseOptions();
 
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, ".data-protection-keys")));
@@ -22,6 +24,7 @@ builder.Services.Configure<FinanceAuthOptions>(builder.Configuration.GetSection(
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<NpgsqlConnectionFactory>();
+builder.Services.AddFinanceOrmMapper(databaseOptions.ConnectionString);
 builder.Services.AddScoped<IFinanceDataSession, FinanceSqlMapperDataSession>();
 builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
 builder.Services.AddScoped<IObjectStorageService, S3CompatibleObjectStorageService>();

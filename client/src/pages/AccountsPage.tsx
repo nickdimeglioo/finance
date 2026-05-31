@@ -1,7 +1,9 @@
 import { FormEvent, useState } from 'react';
+import { Archive } from 'lucide-react';
+import { Button, Checkbox, EmptyState, Input, Select, StatusBadge, Table, type TableColumn } from '../components/ui';
 import { formatMoney } from '../lib/financeFormat';
 import { createAccount, archiveAccount, useAccounts } from '../services/accountsService';
-import type { AccountType, CreateAccountRequest } from '../types/schema';
+import type { AccountListItemDto, AccountType, CreateAccountRequest } from '../types/schema';
 
 const accountTypes: AccountType[] = ['checking', 'savings', 'credit_card', 'loan', 'investment', 'cash', 'other'];
 
@@ -38,6 +40,49 @@ export function AccountsPage() {
     await reload();
   }
 
+  const columns: TableColumn<AccountListItemDto>[] = [
+    {
+      key: 'nickname',
+      label: 'Account',
+      render: (account) => (
+        <>
+          <strong>{account.nickname}</strong>
+          <div className="muted">{account.institution}</div>
+        </>
+      )
+    },
+    { key: 'type', label: 'Type' },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (account) => (
+        <StatusBadge label={account.status} tone={account.status === 'active' ? 'success' : 'neutral'} />
+      )
+    },
+    {
+      key: 'currentBalance',
+      label: 'Balance',
+      align: 'right',
+      render: (account) => formatMoney(account.currentBalance, account.currency)
+    },
+    {
+      key: 'includeInDashboard',
+      label: 'Dashboard',
+      render: (account) => (account.includeInDashboard ? 'Yes' : 'No')
+    },
+    {
+      key: 'actions',
+      label: '',
+      align: 'right',
+      render: (account) =>
+        account.status !== 'archived' ? (
+          <Button type="button" variant="secondary" size="sm" leftIcon={<Archive size={15} />} onClick={() => archive(account.id)}>
+            Archive
+          </Button>
+        ) : null
+    }
+  ];
+
   return (
     <section className="page">
       <header className="page-header">
@@ -48,93 +93,40 @@ export function AccountsPage() {
       </header>
 
       <form className="panel form-grid" onSubmit={submit}>
-        <label>
-          Nickname
-          <input value={form.nickname} onChange={(event) => setForm({ ...form, nickname: event.target.value })} required />
-        </label>
-        <label>
-          Institution
-          <input value={form.institution ?? ''} onChange={(event) => setForm({ ...form, institution: event.target.value })} />
-        </label>
-        <label>
-          Type
-          <select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value as AccountType })}>
-            {accountTypes.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Currency
-          <input value={form.currency} maxLength={3} onChange={(event) => setForm({ ...form, currency: event.target.value.toUpperCase() })} />
-        </label>
-        <label>
-          Opening balance
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={form.openingBalance}
-            onChange={(event) => setForm({ ...form, openingBalance: Number(event.target.value) })}
-          />
-        </label>
-        <label className="checkbox-row">
-          <input
-            type="checkbox"
-            checked={form.includeInDashboard}
-            onChange={(event) => setForm({ ...form, includeInDashboard: event.target.checked })}
-          />
-          Include in dashboard
-        </label>
-        <button type="submit" disabled={saving}>{saving ? 'Saving...' : 'Add Account'}</button>
+        <Input label="Nickname" value={form.nickname} onChange={(event) => setForm({ ...form, nickname: event.target.value })} required />
+        <Input label="Institution" value={form.institution ?? ''} onChange={(event) => setForm({ ...form, institution: event.target.value })} />
+        <Select label="Type" value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value as AccountType })}>
+          {accountTypes.map((type) => (
+            <option key={type} value={type}>
+              {type}
+            </option>
+          ))}
+        </Select>
+        <Input label="Currency" value={form.currency} maxLength={3} onChange={(event) => setForm({ ...form, currency: event.target.value.toUpperCase() })} />
+        <Input
+          label="Opening balance"
+          type="number"
+          step="0.01"
+          min="0"
+          value={form.openingBalance}
+          onChange={(event) => setForm({ ...form, openingBalance: Number(event.target.value) })}
+        />
+        <Checkbox
+          label="Include in dashboard"
+          checked={form.includeInDashboard}
+          onChange={(event) => setForm({ ...form, includeInDashboard: event.target.checked })}
+        />
+        <Button type="submit" loading={saving}>Add Account</Button>
         {message && <div className="notice error">{message}</div>}
       </form>
 
       <div className="panel">
-        {loading && <p>Loading accounts...</p>}
         {error && <p>{error.message}</p>}
-        {!loading && !error && accounts.length === 0 && <p>No accounts yet.</p>}
-        {accounts.length > 0 && (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Account</th>
-                  <th>Type</th>
-                  <th>Status</th>
-                  <th>Balance</th>
-                  <th>Dashboard</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {accounts.map((account) => (
-                  <tr key={account.id}>
-                    <td>
-                      <strong>{account.nickname}</strong>
-                      <div className="muted">{account.institution}</div>
-                    </td>
-                    <td>{account.type}</td>
-                    <td>{account.status}</td>
-                    <td>{formatMoney(account.currentBalance, account.currency)}</td>
-                    <td>{account.includeInDashboard ? 'Yes' : 'No'}</td>
-                    <td>
-                      {account.status !== 'archived' && (
-                        <button type="button" className="secondary" onClick={() => archive(account.id)}>
-                          Archive
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        {!error && accounts.length === 0 && !loading ? <EmptyState title="No accounts yet." /> : null}
+        {!error && (accounts.length > 0 || loading) ? (
+          <Table data={accounts} columns={columns} rowKey="id" loading={loading} emptyMessage="No accounts yet." />
+        ) : null}
       </div>
     </section>
   );
 }
-

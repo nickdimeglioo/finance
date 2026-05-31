@@ -133,16 +133,25 @@ public sealed class AccountService
 
     public async Task<bool> ArchiveAsync(Guid accountId, CancellationToken cancellationToken)
     {
-        var updated = await _db.ExecuteAsync(
+        var account = await _db.QuerySingleOrDefaultAsync<Account>(
             """
-            UPDATE accounts
-            SET status = 'archived', updated_at = now()
+            SELECT *
+            FROM accounts
             WHERE user_id = @UserId AND id = @AccountId
             """,
             new { UserId = _currentUser.UserId, AccountId = accountId },
             cancellationToken: cancellationToken);
 
-        return updated > 0;
+        if (account is null)
+        {
+            return false;
+        }
+
+        account.Status = "archived";
+        account.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await _db.SaveAsync(account, _currentUser.UserId.ToString(), cancellationToken: cancellationToken);
+        return true;
     }
 
     private async Task<AccountDetailDto> GetRequiredAsync(Guid accountId, System.Data.IDbConnection connection, System.Data.IDbTransaction transaction, CancellationToken cancellationToken)

@@ -8,8 +8,8 @@ Repo-specific working conventions for this finance tracker. Prefer these rules o
 - Source plans:
   - `financial-tracker-build-phases-revised-csharp-postgres-s3.md` is the current build plan.
   - `financial-tracker-plan.md` is historical product context. Use it for intent, but do not copy its old SQLite/Express/local-first stack.
-- Reusable template source: `C:\Users\nicky\Desktop\projects\pipeline\saas-template`.
-- Prefer reusing standalone pieces from the pipeline template instead of rebuilding generic infrastructure.
+- Reusable template source: `shared/` in this repo, mirrored from prior projects. Use it as reference source; take only the pieces needed for finance and adapt them into `client/` or `server/`.
+- Historical external source: `C:\Users\nicky\Desktop\projects\pipeline\saas-template`. Prefer the in-repo `shared/` copy when present.
 
 ## Local Ports
 
@@ -25,14 +25,17 @@ The pipeline template uses backend `8243` and common Vite/MinIO defaults, so avo
 
 ## Reusable Template Conventions
 
-- Backend reusable candidates:
+- Backend reusable/reference candidates:
+  - `shared/backend/api/SaasTemplate/PipelineRunner.Server/Program.cs`: startup ordering for controllers, auth, mapper registration, storage, middleware, and mapper type-handler setup.
+  - `shared/backend/api/SaasTemplate/PipelineRunner.Server/Services/Mapper`: DI-first `IOrmMapperService`, connection provider, and service registration pattern.
   - `api/SaasTemplate/SqlMapper`: custom ORM mapper and model attributes.
   - `api/SaasTemplate/Email`: email abstractions and no-op/provider pattern.
   - `api/SaasTemplate/RedisCache`: optional cache module if finance workflows later need it.
   - `api/SaasTemplate/Authentication`: auth, identity, account flows, 2FA, and current-user patterns.
   - `db/liquibase`: Liquibase structure and changelog style.
   - `PipelineRunner.Server/Services/StorageManagementService.cs` and storage config for S3-compatible storage patterns.
-- Frontend reusable candidates:
+- Frontend reusable/reference candidates:
+  - `shared/frontend/web/src/components/ui`: component source for table, button, input, select, checkbox, badge, modal/dialog, toast, and empty/loading patterns.
   - `web/src/types/schema.ts` as the central contract/types pattern.
   - `web/src/index.css` for CSS variables, theme tokens, and layout utility conventions.
   - `web/src/lib/http.ts`, `web/src/services/*`, auth store, user settings store, and existing components.
@@ -43,8 +46,9 @@ The pipeline template uses backend `8243` and common Vite/MinIO defaults, so avo
 - Keep request flow explicit: controller validates HTTP shape and calls a service; service owns user scoping, permission checks, loading, mutations, transactions, and cache decisions; data access goes through the finance data contract/SqlMapper boundary; interceptors are reserved for audit and pre/post-processing concerns only.
 - The in-repo SQL mapper lives at `server/SqlMapper`.
 - The application-facing data contract lives at `server/FinanceTracker.Data.Contracts` and is implemented in the API by `FinanceSqlMapperDataSession`.
-- API startup must initialize the local mapper runtime (`SqlMapperRuntime.Configure`) so underscore mapping, `DateOnly`/`TimeOnly`, JSON/JSONB handlers, and finance connection defaults are active before services query or save data.
-- Prefer `OrmMapper`/SqlMapper raw execution helpers and query builders (`QuerySelect`, `From`, mapper transactions) behind the finance data contract. Direct Dapper usage should stay inside the mapper project or mapper initialization code.
+- API startup must register the local mapper runtime through `AddFinanceOrmMapper(...)`, which calls `SqlMapperRuntime.Configure(...)` before services query or save data. This sets underscore mapping, `DateOnly`/`TimeOnly`, JSON/JSONB handlers, and finance connection defaults.
+- App code should depend on `IFinanceDataSession`. `FinanceSqlMapperDataSession` should delegate to `IOrmMapperService`; direct static `OrmMapper` calls should stay inside the mapper service/mapper project, and direct Dapper usage should stay inside the mapper project or mapper initialization code.
+- Prefer mapper-backed saves and transactions for mutations. Keep raw SQL only where it is an explicit query/projection at the data contract boundary or where query builders cannot express the projection cleanly.
 - Use the existing auth/login/account infrastructure where possible. Do not create a finance-local users table unless the shared auth model requires a profile extension.
 - Use `IOrmMapperService`/SqlMapper for finance domain data unless the linked template establishes a different app-wide standard.
 - EF Core should remain primarily for auth/identity if that is how the reusable template is linked.
@@ -70,7 +74,8 @@ The pipeline template uses backend `8243` and common Vite/MinIO defaults, so avo
 ## Frontend Rules
 
 - Use React + TypeScript + Vite.
-- Use shared app shell, auth/session provider, API client, service modules, table/modal/button/input/badge/dialog/loader/empty-state components when available.
+- Use shared-style app shell, auth/session provider, API client, service modules, and component primitives. The current local component library lives at `client/src/components/ui` and is adapted from `shared/frontend/web/src/components/ui`.
+- Use `Table`, `Button`, `Input`, `Select`, `Checkbox`, `StatusBadge`, and `EmptyState` from `client/src/components/ui` before creating page-local tables/forms/buttons.
 - Put finance contracts in `client/src/types/schema.ts` or the local equivalent that mirrors the template convention.
 - API calls should go through a service module, not direct page-level fetch calls.
 - Use CSS variables/theme tokens from the shared design system; avoid hardcoded one-off palettes.

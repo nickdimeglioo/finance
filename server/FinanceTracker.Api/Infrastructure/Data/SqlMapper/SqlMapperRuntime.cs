@@ -12,6 +12,11 @@ public static class SqlMapperRuntime
             .Get<DatabaseOptions>()?
             .ConnectionString;
 
+        Configure(connectionString);
+    }
+
+    public static void Configure(string? connectionString)
+    {
         DapperFieldType.RegisterDefaultHandlers();
         DbConnection.Configure(connectionString ?? string.Empty);
     }

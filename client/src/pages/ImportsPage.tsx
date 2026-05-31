@@ -1,3 +1,5 @@
+import { EmptyState } from '../components/ui';
+
 export function ImportsPage() {
   return (
     <section className="page">
@@ -7,8 +9,9 @@ export function ImportsPage() {
           <p className="page-subtitle">Upload, mapping, preview, rules, and commit workflows are scheduled for Phase 4.</p>
         </div>
       </header>
-      <div className="panel">Import batches will use S3 object keys and PostgreSQL metadata.</div>
+      <div className="panel">
+        <EmptyState title="Import batches" message="S3 object keys, mapping, preview, rules, and commit workflows will be built here." />
+      </div>
     </section>
   );
 }
-

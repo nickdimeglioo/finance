@@ -5,10 +5,10 @@ using Npgsql;
 public static class DbConnection
 {
     private const string DefaultSystemConnection =
-        "Host=localhost;Port=5438;Database=finance_tracker;Username=finance;Password=finance-dev-password";
+        "Host=localhost;Port=5432;Database=finance_tracker;Username=postgres;Password=password";
 
     private const string DefaultUsersConnection =
-        "Host=localhost;Port=5438;Database=finance_tracker;Username=finance;Password=finance-dev-password";
+        "Host=localhost;Port=5432;Database=finance_tracker;Username=app_user;Password=password";
 
     private static string SystemConnectionString;
     private static string UsersConnectionString;

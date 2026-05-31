@@ -1,3 +1,5 @@
+import { EmptyState } from '../components/ui';
+
 export function SubscriptionsPage() {
   return (
     <section className="page">
@@ -7,8 +9,9 @@ export function SubscriptionsPage() {
           <p className="page-subtitle">Recurring rules and subscription tracking are scheduled for Phase 5.</p>
         </div>
       </header>
-      <div className="panel">Recurring spend and missing transaction alerts will appear here.</div>
+      <div className="panel">
+        <EmptyState title="Subscriptions workspace" message="Recurring spend, renewal dates, and missing transaction alerts will appear here." />
+      </div>
     </section>
   );
 }
-

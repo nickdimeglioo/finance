@@ -1,9 +1,22 @@
+import { EmptyState, Table, type TableColumn } from '../components/ui';
 import { formatDate, formatMoney, monthRange } from '../lib/financeFormat';
 import { useDashboardSummary } from '../services/dashboardService';
+import type { TransactionListItemDto } from '../types/schema';
 
 export function DashboardPage() {
   const currentMonth = monthRange();
   const { summary, loading, error } = useDashboardSummary(currentMonth.from, currentMonth.to);
+  const columns: TableColumn<TransactionListItemDto>[] = [
+    { key: 'date', label: 'Date', render: (transaction) => formatDate(transaction.date) },
+    { key: 'description', label: 'Description' },
+    { key: 'type', label: 'Type' },
+    {
+      key: 'amount',
+      label: 'Amount',
+      align: 'right',
+      render: (transaction) => formatMoney(transaction.amount, transaction.currency)
+    }
+  ];
 
   return (
     <section className="page">
@@ -31,30 +44,9 @@ export function DashboardPage() {
           <h2>Recent Transactions</h2>
           <span>{summary?.pendingReminderCount ?? 0} reminders</span>
         </div>
-        {summary && summary.recentTransactions.length === 0 && <p>No recent transactions.</p>}
+        {summary && summary.recentTransactions.length === 0 && <EmptyState title="No recent transactions." />}
         {summary && summary.recentTransactions.length > 0 && (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Description</th>
-                  <th>Type</th>
-                  <th>Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {summary.recentTransactions.map((transaction) => (
-                  <tr key={transaction.id}>
-                    <td>{formatDate(transaction.date)}</td>
-                    <td>{transaction.description}</td>
-                    <td>{transaction.type}</td>
-                    <td>{formatMoney(transaction.amount, transaction.currency)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table data={summary.recentTransactions} columns={columns} rowKey="id" />
         )}
       </div>
     </section>
@@ -69,4 +61,3 @@ function Metric({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-

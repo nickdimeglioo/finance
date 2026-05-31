@@ -1,11 +1,14 @@
 import { FormEvent, useState } from 'react';
+import { Ban, Save } from 'lucide-react';
+import { Button, EmptyState, Input, Select, StatusBadge, Table, type TableColumn } from '../components/ui';
 import { formatDate, formatMoney, toApiDate } from '../lib/financeFormat';
 import { useAccounts } from '../services/accountsService';
 import { createTransaction, createTransfer, updateTransactionStatus, useTransactions, voidTransaction } from '../services/transactionsService';
-import type { CreateTransactionRequest, CreateTransferRequest, TransactionClassification, TransactionType } from '../types/schema';
+import type { CreateTransactionRequest, CreateTransferRequest, TransactionClassification, TransactionListItemDto, TransactionStatus, TransactionType } from '../types/schema';
 
 const types: TransactionType[] = ['expense', 'income', 'adjustment'];
 const classifications: TransactionClassification[] = ['personal', 'business', 'mixed', 'ignored', 'unknown'];
+const statuses: TransactionStatus[] = ['pending', 'posted', 'reconciled', 'voided'];
 
 export function TransactionsPage() {
   const { accounts } = useAccounts();
@@ -46,6 +49,59 @@ export function TransactionsPage() {
     }
   }
 
+  const columns: TableColumn<TransactionListItemDto>[] = [
+    { key: 'date', label: 'Date', render: (item) => formatDate(item.date) },
+    { key: 'description', label: 'Description' },
+    { key: 'type', label: 'Type' },
+    { key: 'classification', label: 'Class' },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (item) => (
+        <Select
+          aria-label="Transaction status"
+          value={item.status}
+          onChange={async (event) => {
+            await updateTransactionStatus(item.id, event.target.value as TransactionStatus);
+            await reload();
+          }}
+        >
+          {statuses.map((status) => (
+            <option key={status} value={status}>{status}</option>
+          ))}
+        </Select>
+      )
+    },
+    {
+      key: 'amount',
+      label: 'Amount',
+      align: 'right',
+      render: (item) => formatMoney(item.amount, item.currency)
+    },
+    {
+      key: 'actions',
+      label: '',
+      align: 'right',
+      render: (item) =>
+        !item.isVoid ? (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            leftIcon={<Ban size={15} />}
+            onClick={async () => {
+              await voidTransaction(item.id, item.type === 'transfer');
+              await reload();
+            }}
+          >
+            Void
+          </Button>
+        ) : (
+          <StatusBadge label="voided" tone="danger" />
+        )
+    }
+  ];
+
   return (
     <section className="page">
       <header className="page-header">
@@ -56,140 +112,75 @@ export function TransactionsPage() {
       </header>
 
       <form className="panel form-grid" onSubmit={submit}>
-        <label>
-          Mode
-          <select value={mode} onChange={(event) => setMode(event.target.value as 'transaction' | 'transfer')}>
-            <option value="transaction">Transaction</option>
-            <option value="transfer">Transfer</option>
-          </select>
-        </label>
+        <Select label="Mode" value={mode} onChange={(event) => setMode(event.target.value as 'transaction' | 'transfer')}>
+          <option value="transaction">Transaction</option>
+          <option value="transfer">Transfer</option>
+        </Select>
 
         {mode === 'transaction' ? (
           <>
-            <label>
-              Account
-              <select value={transaction.accountId} onChange={(event) => setTransaction({ ...transaction, accountId: event.target.value })} required>
-                <option value="">Select account</option>
-                {accounts.map((account) => (
-                  <option key={account.id} value={account.id}>{account.nickname}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Type
-              <select value={transaction.type} onChange={(event) => setTransaction({ ...transaction, type: event.target.value as TransactionType })}>
-                {types.map((type) => <option key={type} value={type}>{type}</option>)}
-              </select>
-            </label>
+            <Select label="Account" value={transaction.accountId} onChange={(event) => setTransaction({ ...transaction, accountId: event.target.value })} required>
+              <option value="">Select account</option>
+              {accounts.map((account) => (
+                <option key={account.id} value={account.id}>{account.nickname}</option>
+              ))}
+            </Select>
+            <Select label="Type" value={transaction.type} onChange={(event) => setTransaction({ ...transaction, type: event.target.value as TransactionType })}>
+              {types.map((type) => <option key={type} value={type}>{type}</option>)}
+            </Select>
           </>
         ) : (
           <>
-            <label>
-              From
-              <select value={transfer.fromAccountId} onChange={(event) => setTransfer({ ...transfer, fromAccountId: event.target.value })} required>
-                <option value="">Select account</option>
-                {accounts.map((account) => <option key={account.id} value={account.id}>{account.nickname}</option>)}
-              </select>
-            </label>
-            <label>
-              To
-              <select value={transfer.toAccountId} onChange={(event) => setTransfer({ ...transfer, toAccountId: event.target.value })} required>
-                <option value="">Select account</option>
-                {accounts.map((account) => <option key={account.id} value={account.id}>{account.nickname}</option>)}
-              </select>
-            </label>
+            <Select label="From" value={transfer.fromAccountId} onChange={(event) => setTransfer({ ...transfer, fromAccountId: event.target.value })} required>
+              <option value="">Select account</option>
+              {accounts.map((account) => <option key={account.id} value={account.id}>{account.nickname}</option>)}
+            </Select>
+            <Select label="To" value={transfer.toAccountId} onChange={(event) => setTransfer({ ...transfer, toAccountId: event.target.value })} required>
+              <option value="">Select account</option>
+              {accounts.map((account) => <option key={account.id} value={account.id}>{account.nickname}</option>)}
+            </Select>
           </>
         )}
 
-        <label>
-          Date
-          <input
-            type="date"
-            value={mode === 'transfer' ? transfer.date : transaction.date}
-            onChange={(event) => mode === 'transfer' ? setTransfer({ ...transfer, date: event.target.value }) : setTransaction({ ...transaction, date: event.target.value })}
-          />
-        </label>
-        <label>
-          Description
-          <input
-            value={mode === 'transfer' ? transfer.description : transaction.description}
-            onChange={(event) => mode === 'transfer' ? setTransfer({ ...transfer, description: event.target.value }) : setTransaction({ ...transaction, description: event.target.value })}
-            required
-          />
-        </label>
-        <label>
-          Amount
-          <input
-            type="number"
-            step="0.01"
-            value={mode === 'transfer' ? transfer.amount : transaction.amount}
-            onChange={(event) => mode === 'transfer' ? setTransfer({ ...transfer, amount: Number(event.target.value) }) : setTransaction({ ...transaction, amount: Number(event.target.value) })}
-          />
-        </label>
-        <label>
-          Classification
-          <select
-            value={mode === 'transfer' ? transfer.classification : transaction.classification}
-            onChange={(event) => mode === 'transfer'
-              ? setTransfer({ ...transfer, classification: event.target.value as TransactionClassification })
-              : setTransaction({ ...transaction, classification: event.target.value as TransactionClassification })}
-          >
-            {classifications.map((classification) => <option key={classification} value={classification}>{classification}</option>)}
-          </select>
-        </label>
-        <button type="submit">Save</button>
+        <Input
+          label="Date"
+          type="date"
+          value={mode === 'transfer' ? transfer.date : transaction.date}
+          onChange={(event) => mode === 'transfer' ? setTransfer({ ...transfer, date: event.target.value }) : setTransaction({ ...transaction, date: event.target.value })}
+        />
+        <Input
+          label="Description"
+          value={mode === 'transfer' ? transfer.description : transaction.description}
+          onChange={(event) => mode === 'transfer' ? setTransfer({ ...transfer, description: event.target.value }) : setTransaction({ ...transaction, description: event.target.value })}
+          required
+        />
+        <Input
+          label="Amount"
+          type="number"
+          step="0.01"
+          value={mode === 'transfer' ? transfer.amount : transaction.amount}
+          onChange={(event) => mode === 'transfer' ? setTransfer({ ...transfer, amount: Number(event.target.value) }) : setTransaction({ ...transaction, amount: Number(event.target.value) })}
+        />
+        <Select
+          label="Classification"
+          value={mode === 'transfer' ? transfer.classification : transaction.classification}
+          onChange={(event) => mode === 'transfer'
+            ? setTransfer({ ...transfer, classification: event.target.value as TransactionClassification })
+            : setTransaction({ ...transaction, classification: event.target.value as TransactionClassification })}
+        >
+          {classifications.map((classification) => <option key={classification} value={classification}>{classification}</option>)}
+        </Select>
+        <Button type="submit" leftIcon={<Save size={15} />}>Save</Button>
         {message && <div className="notice error">{message}</div>}
       </form>
 
       <div className="panel">
-        {loading && <p>Loading transactions...</p>}
         {error && <p>{error.message}</p>}
-        {!loading && !error && result.items.length === 0 && <p>No transactions yet.</p>}
-        {result.items.length > 0 && (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Description</th>
-                  <th>Type</th>
-                  <th>Class</th>
-                  <th>Status</th>
-                  <th>Amount</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.items.map((item) => (
-                  <tr key={item.id}>
-                    <td>{formatDate(item.date)}</td>
-                    <td>{item.description}</td>
-                    <td>{item.type}</td>
-                    <td>{item.classification}</td>
-                    <td>
-                      <select value={item.status} onChange={async (event) => { await updateTransactionStatus(item.id, event.target.value); await reload(); }}>
-                        <option value="pending">pending</option>
-                        <option value="posted">posted</option>
-                        <option value="reconciled">reconciled</option>
-                        <option value="voided">voided</option>
-                      </select>
-                    </td>
-                    <td>{formatMoney(item.amount, item.currency)}</td>
-                    <td>
-                      {!item.isVoid && (
-                        <button type="button" className="secondary" onClick={async () => { await voidTransaction(item.id, item.type === 'transfer'); await reload(); }}>
-                          Void
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        {!error && result.items.length === 0 && !loading ? <EmptyState title="No transactions yet." /> : null}
+        {!error && (result.items.length > 0 || loading) ? (
+          <Table data={result.items} columns={columns} rowKey="id" loading={loading} emptyMessage="No transactions yet." />
+        ) : null}
       </div>
     </section>
   );
 }
-

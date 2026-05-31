@@ -142,23 +142,18 @@ public sealed class TransactionService
                 return false;
             }
 
-            await _db.ExecuteAsync(
-                """
-                UPDATE transactions
-                SET is_void = true, status = 'voided', updated_at = now()
-                WHERE user_id = @UserId
-                  AND (id = @TransactionId OR (@IncludePartner AND id = @PartnerId))
-                """,
-                new
+            MarkVoided(entity);
+            await _db.SaveAsync(entity, _currentUser.UserId.ToString(), connection, transaction, cancellationToken);
+
+            if (includeTransferPartner && entity.TransferPartnerId is Guid partnerId)
+            {
+                var partner = await GetEntityForUpdateAsync(partnerId, connection, transaction, cancellationToken);
+                if (partner is not null)
                 {
-                    UserId = _currentUser.UserId,
-                    TransactionId = transactionId,
-                    IncludePartner = includeTransferPartner,
-                    PartnerId = entity.TransferPartnerId
-                },
-                connection,
-                transaction,
-                cancellationToken);
+                    MarkVoided(partner);
+                    await _db.SaveAsync(partner, _currentUser.UserId.ToString(), connection, transaction, cancellationToken);
+                }
+            }
 
             return true;
         }, cancellationToken);
@@ -171,18 +166,26 @@ public sealed class TransactionService
             throw new ArgumentException("Invalid transaction status.");
         }
 
-        var updated = await _db.ExecuteAsync(
+        var entity = await _db.QuerySingleOrDefaultAsync<FinancialTransaction>(
             """
-            UPDATE transactions
-            SET status = @Status,
-                is_void = @IsVoid,
-                updated_at = now()
+            SELECT *
+            FROM transactions
             WHERE user_id = @UserId AND id = @TransactionId
             """,
-            new { UserId = _currentUser.UserId, TransactionId = transactionId, Status = status, IsVoid = status == "voided" },
+            new { UserId = _currentUser.UserId, TransactionId = transactionId },
             cancellationToken: cancellationToken);
 
-        return updated == 0 ? null : await GetAsync(transactionId, cancellationToken);
+        if (entity is null)
+        {
+            return null;
+        }
+
+        entity.Status = status;
+        entity.IsVoid = status == "voided";
+        entity.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveAsync(entity, _currentUser.UserId.ToString(), cancellationToken: cancellationToken);
+
+        return await GetAsync(transactionId, cancellationToken);
     }
 
     internal async Task EnsureAccountOwnedAsync(Guid accountId, System.Data.IDbConnection connection, System.Data.IDbTransaction transaction, CancellationToken cancellationToken)
@@ -270,6 +273,13 @@ public sealed class TransactionService
         }
     }
 
+    private static void MarkVoided(FinancialTransaction entity)
+    {
+        entity.IsVoid = true;
+        entity.Status = "voided";
+        entity.UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
     private static void ValidateTransaction(string type, string classification, decimal amount, string currency, IReadOnlyList<CreateTransactionSplitRequest>? splits)
     {
         if (!FinanceValues.TransactionTypes.Contains(type))
@@ -327,8 +337,8 @@ public sealed class TransactionService
             filters.Classification,
             filters.Category,
             filters.Status,
-            From = filters.From?.ToDateTime(TimeOnly.MinValue),
-            To = filters.To?.ToDateTime(TimeOnly.MinValue),
+            From = filters.From,//?.ToDateTime(TimeOnly.MinValue),
+            To = filters.To,//?.ToDateTime(TimeOnly.MinValue),
             filters.AmountMin,
             filters.AmountMax,
             Search = string.IsNullOrWhiteSpace(filters.Search) ? null : $"%{filters.Search.Trim()}%",
@@ -349,11 +359,11 @@ public sealed class TransactionService
               AND (@Classification IS NULL OR t.classification = @Classification)
               AND (@Category IS NULL OR t.category = @Category)
               AND (@Status IS NULL OR t.status = @Status)
-              AND (@From IS NULL OR t.date >= @From)
-              AND (@To IS NULL OR t.date <= @To)
+              AND (@From::date IS NULL OR t.date >= @From::date)
+              AND (@To::date IS NULL OR t.date <= @To::date)
               AND (@AmountMin IS NULL OR t.amount >= @AmountMin)
               AND (@AmountMax IS NULL OR t.amount <= @AmountMax)
-              AND (@Search IS NULL OR t.description ILIKE @Search OR t.merchant ILIKE @Search)
+              AND (@Search IS NULL OR t.description ILIKE @Search OR t.merchant ILIKE @Search) 
             """);
 
         return builder.ToString();
@@ -381,7 +391,7 @@ internal static class TransactionSql
             t.is_void,
             t.is_split,
             t.transfer_partner_id
-        FROM transactions t
+        FROM transactions t 
         """;
 
     public const string SelectDetail = """
@@ -407,13 +417,13 @@ internal static class TransactionSql
             t.recurring_rule_id,
             t.created_at,
             t.updated_at
-        FROM transactions t
+        FROM transactions t 
         """;
 
     public const string SelectSplits = """
         SELECT id, category, classification, amount, notes
         FROM transaction_splits
         WHERE transaction_id = @TransactionId
-        ORDER BY created_at, id
+        ORDER BY created_at, id 
         """;
 }

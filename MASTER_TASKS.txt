@@ -63,3 +63,8 @@ FT-P4-0003 - Fix DateOnly query parameters
 FT-P4-0004 - Upgrade task tracker CLI API
 FT-P4-0005 - Add task tracker skill
 FT-P4-0006 - Update agent conventions
+FT-P4-0007 - Import shared mapper DI pattern
+FT-P4-0008 - Remove direct OrmMapper calls from finance data session
+FT-P4-0009 - Add local shared-style UI component library
+FT-P4-0010 - Refactor finance pages to component library
+FT-P4-0011 - Align agent instructions with provided shared folder
