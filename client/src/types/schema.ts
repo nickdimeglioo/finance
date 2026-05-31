@@ -154,3 +154,165 @@ export interface DashboardSummaryDto {
   recentTransactions: TransactionListItemDto[];
   pendingReminderCount: number;
 }
+
+export type ImportStatus = 'uploaded' | 'parsed' | 'previewed' | 'committed' | 'failed' | 'cancelled';
+
+export interface ImportBatchDto {
+  id: string;
+  accountId: string;
+  institution?: string | null;
+  originalFileName: string;
+  contentType: string;
+  s3ObjectKey: string;
+  status: ImportStatus;
+  rowCount: number;
+  acceptedCount: number;
+  duplicateCount: number;
+  errorCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UploadImportResponse {
+  id: string;
+  accountId: string;
+  originalFileName: string;
+  contentType: string;
+  s3ObjectKey: string;
+  status: ImportStatus;
+}
+
+export interface ImportTemplateDto {
+  id: string;
+  institution?: string | null;
+  name: string;
+  columnMap: Record<string, string>;
+  dateFormat?: string | null;
+  amountFormat?: string | null;
+}
+
+export interface ParsedImportDto {
+  batchId: string;
+  columns: string[];
+  sampleRows: Record<string, string>[];
+  templates: ImportTemplateDto[];
+}
+
+export interface ImportColumnMap {
+  date?: string | null;
+  description?: string | null;
+  merchant?: string | null;
+  amount?: string | null;
+  debit?: string | null;
+  credit?: string | null;
+  type?: string | null;
+  category?: string | null;
+  classification?: string | null;
+}
+
+export interface PreviewImportRequest {
+  columnMap: ImportColumnMap;
+  dateFormat?: string | null;
+  amountFormat?: string | null;
+  saveTemplate: boolean;
+  templateName?: string | null;
+}
+
+export interface ImportPreviewRowDto {
+  id: string;
+  rowNumber: number;
+  rawData: Record<string, string>;
+  rawDescription?: string | null;
+  cleanedDescription?: string | null;
+  date?: string | null;
+  amount?: number | null;
+  type?: TransactionType | null;
+  category?: string | null;
+  classification: TransactionClassification;
+  importHash?: string | null;
+  isDuplicate: boolean;
+  accepted: boolean;
+  errors: string[];
+}
+
+export interface UpdateImportPreviewRowRequest {
+  cleanedDescription?: string | null;
+  date?: string | null;
+  amount?: number | null;
+  type?: string | null;
+  category?: string | null;
+  classification?: string | null;
+  accepted?: boolean | null;
+}
+
+export interface ImportCommitResult {
+  imported: number;
+  skippedDuplicates: number;
+  rejected: number;
+  errors: number;
+}
+
+export interface ImportRuleDto {
+  id: string;
+  name: string;
+  pattern: string;
+  mapsToType?: string | null;
+  mapsToCategory?: string | null;
+  mapsToClassification?: string | null;
+  mapsToDescription?: string | null;
+  priority: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertImportRuleRequest {
+  name: string;
+  pattern: string;
+  mapsToType?: string | null;
+  mapsToCategory?: string | null;
+  mapsToClassification?: string | null;
+  mapsToDescription?: string | null;
+  priority: number;
+  isActive: boolean;
+}
+
+export interface TestImportRuleResult {
+  rawDescription: string;
+  cleanedDescription: string;
+  type?: string | null;
+  category?: string | null;
+  classification: TransactionClassification;
+  matchedRules: ImportRuleDto[];
+}
+
+export interface ClassificationRuleDto {
+  id: string;
+  name: string;
+  ruleType: string;
+  fieldTarget: string;
+  value: string;
+  classification: TransactionClassification;
+  alsoSetCategory?: string | null;
+  priority: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertClassificationRuleRequest {
+  name: string;
+  ruleType: string;
+  fieldTarget: string;
+  value: string;
+  classification: TransactionClassification;
+  alsoSetCategory?: string | null;
+  priority: number;
+  isActive: boolean;
+}
+
+export interface TestClassificationRuleResult {
+  classification: TransactionClassification;
+  category?: string | null;
+  matchedRule?: ClassificationRuleDto | null;
+}

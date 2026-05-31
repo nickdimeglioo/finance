@@ -29,7 +29,7 @@ This plan intentionally does **not** rebuild generic infrastructure that already
 - Reserve finance-specific local ports so this app can run beside the existing pipeline project:
   - Frontend Vite dev server: `5273`
   - Backend ASP.NET Core API: `8353`
-  - PostgreSQL: `5438`
+  - PostgreSQL: `5432`
   - MinIO/S3 API: `9010`
   - MinIO console: `9011`
 - Keep project work tracked in `task-board.csv` with these exact headers:

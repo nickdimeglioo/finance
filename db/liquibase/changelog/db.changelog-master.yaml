@@ -5,4 +5,5 @@ databaseChangeLog:
       file: changelog/001-core-finance-schema.sql
   - include:
       file: changelog/002-phase-3-core-feature-support.sql
-
+  - include:
+      file: changelog/003-phase-4-imports-rules.sql

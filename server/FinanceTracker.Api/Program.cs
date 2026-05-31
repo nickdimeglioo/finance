@@ -33,6 +33,8 @@ builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<TransactionService>();
 builder.Services.AddScoped<TransferService>();
 builder.Services.AddScoped<ImportService>();
+builder.Services.AddScoped<ImportRuleService>();
+builder.Services.AddScoped<ClassificationRuleService>();
 builder.Services.AddScoped<ReportService>();
 builder.Services.AddScoped<GuidanceService>();
 builder.Services.AddScoped<DashboardService>();

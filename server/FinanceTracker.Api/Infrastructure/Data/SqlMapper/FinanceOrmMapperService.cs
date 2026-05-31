@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Data;
+using System.Linq.Expressions;
 using Npgsql;
 
 namespace FinanceTracker.Api.Infrastructure.Data.SqlMapper;
@@ -53,6 +54,24 @@ public sealed class FinanceConnectionProvider : IConnectionProvider
 
 public interface IOrmMapperService
 {
+    Task<T?> GetByIdAsync<T>(
+        object id,
+        IDbConnection? connection = null,
+        IDbTransaction? transaction = null)
+        where T : class, new();
+
+    Task<IReadOnlyList<T>> WhereAsync<T>(
+        Expression<Func<T, bool>> predicate,
+        IDbConnection? connection = null,
+        IDbTransaction? transaction = null)
+        where T : class, new();
+
+    Task<T?> FirstOrDefaultAsync<T>(
+        Expression<Func<T, bool>> predicate,
+        IDbConnection? connection = null,
+        IDbTransaction? transaction = null)
+        where T : class, new();
+
     Task<IEnumerable<T>> ExecuteRawQueryAsync<T>(
         string sql,
         object? parameters = null,
@@ -98,6 +117,51 @@ public sealed class FinanceOrmMapperService : IOrmMapperService
     {
         _connectionProvider = connectionProvider;
         _interceptors = services.GetServices<IDbInterceptor>().ToList();
+    }
+
+    public async Task<T?> GetByIdAsync<T>(
+        object id,
+        IDbConnection? connection = null,
+        IDbTransaction? transaction = null)
+        where T : class, new()
+    {
+        return await WithConnectionAsync(
+            activeConnection => OrmMapper.GetByIdAsync<T>(
+                id,
+                depth: 0,
+                selectQuery: CreateSelectQuery(activeConnection, transaction)),
+            connection,
+            transaction);
+    }
+
+    public async Task<IReadOnlyList<T>> WhereAsync<T>(
+        Expression<Func<T, bool>> predicate,
+        IDbConnection? connection = null,
+        IDbTransaction? transaction = null)
+        where T : class, new()
+    {
+        return await WithConnectionAsync(
+            async activeConnection => await OrmMapper
+                .QueryGet<T>(CreateSelectQuery(activeConnection, transaction))
+                .Where(predicate)
+                .ToListAsync(depth: 0),
+            connection,
+            transaction);
+    }
+
+    public async Task<T?> FirstOrDefaultAsync<T>(
+        Expression<Func<T, bool>> predicate,
+        IDbConnection? connection = null,
+        IDbTransaction? transaction = null)
+        where T : class, new()
+    {
+        return await WithConnectionAsync(
+            activeConnection => OrmMapper
+                .QueryGet<T>(CreateSelectQuery(activeConnection, transaction))
+                .Where(predicate)
+                .FirstOrDefaultAsync(depth: 0),
+            connection,
+            transaction);
     }
 
     public async Task<IEnumerable<T>> ExecuteRawQueryAsync<T>(
@@ -173,6 +237,17 @@ public sealed class FinanceOrmMapperService : IOrmMapperService
     public IDbConnection CreateConnection()
     {
         return _connectionProvider.GetUsersConnection();
+    }
+
+    private SelectQuery CreateSelectQuery(IDbConnection connection, IDbTransaction? transaction)
+    {
+        return new SelectQuery
+        {
+            CurrentConnection = connection,
+            CurrentTransaction = transaction,
+            ManageConnectionLifecycle = false,
+            Interceptors = _interceptors
+        };
     }
 
     private async Task<T> WithConnectionAsync<T>(

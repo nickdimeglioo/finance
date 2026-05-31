@@ -9,11 +9,13 @@ public sealed class TransactionService
 {
     private readonly ICurrentUserContext _currentUser;
     private readonly IFinanceDataSession _db;
+    private readonly ClassificationRuleService _classificationRules;
 
-    public TransactionService(ICurrentUserContext currentUser, IFinanceDataSession db)
+    public TransactionService(ICurrentUserContext currentUser, IFinanceDataSession db, ClassificationRuleService classificationRules)
     {
         _currentUser = currentUser;
         _db = db;
+        _classificationRules = classificationRules;
     }
 
     public async Task<PagedResult<TransactionListItemDto>> ListAsync(TransactionFiltersRequest filters, CancellationToken cancellationToken)
@@ -84,6 +86,7 @@ public sealed class TransactionService
                 UpdatedAt = now
             };
 
+            await _classificationRules.ApplyToTransactionAsync(entity, cancellationToken);
             await _db.SaveAsync(entity, _currentUser.UserId.ToString(), connection, transaction, cancellationToken);
             await ReplaceSplitsAsync(entity.Id, request.Splits, connection, transaction, cancellationToken);
             return await GetRequiredAsync(entity.Id, connection, transaction, cancellationToken);
@@ -126,6 +129,7 @@ public sealed class TransactionService
             entity.IsSplit = request.Splits?.Count > 0;
             entity.UpdatedAt = DateTimeOffset.UtcNow;
 
+            await _classificationRules.ApplyToTransactionAsync(entity, cancellationToken);
             await _db.SaveAsync(entity, _currentUser.UserId.ToString(), connection, transaction, cancellationToken);
             await ReplaceSplitsAsync(entity.Id, request.Splits, connection, transaction, cancellationToken);
             return await GetRequiredAsync(entity.Id, connection, transaction, cancellationToken);
@@ -166,14 +170,7 @@ public sealed class TransactionService
             throw new ArgumentException("Invalid transaction status.");
         }
 
-        var entity = await _db.QuerySingleOrDefaultAsync<FinancialTransaction>(
-            """
-            SELECT *
-            FROM transactions
-            WHERE user_id = @UserId AND id = @TransactionId
-            """,
-            new { UserId = _currentUser.UserId, TransactionId = transactionId },
-            cancellationToken: cancellationToken);
+        var entity = await GetOwnedEntityAsync(transactionId, cancellationToken: cancellationToken);
 
         if (entity is null)
         {
@@ -190,14 +187,9 @@ public sealed class TransactionService
 
     internal async Task EnsureAccountOwnedAsync(Guid accountId, System.Data.IDbConnection connection, System.Data.IDbTransaction transaction, CancellationToken cancellationToken)
     {
-        var exists = await _db.QuerySingleOrDefaultAsync<Guid?>(
-            "SELECT id FROM accounts WHERE user_id = @UserId AND id = @AccountId",
-            new { UserId = _currentUser.UserId, AccountId = accountId },
-            connection,
-            transaction,
-            cancellationToken);
+        var account = await _db.GetByIdAsync<FinanceTracker.Api.Features.Accounts.Account>(accountId, connection, transaction, cancellationToken);
 
-        if (exists is null)
+        if (account?.UserId != _currentUser.UserId)
         {
             throw new ArgumentException("Account was not found.");
         }
@@ -230,12 +222,17 @@ public sealed class TransactionService
 
     private async Task<FinancialTransaction?> GetEntityForUpdateAsync(Guid transactionId, System.Data.IDbConnection connection, System.Data.IDbTransaction transaction, CancellationToken cancellationToken)
     {
-        return await _db.QuerySingleOrDefaultAsync<FinancialTransaction>(
-            "SELECT * FROM transactions WHERE user_id = @UserId AND id = @TransactionId",
-            new { UserId = _currentUser.UserId, TransactionId = transactionId },
-            connection,
-            transaction,
-            cancellationToken);
+        return await GetOwnedEntityAsync(transactionId, connection, transaction, cancellationToken);
+    }
+
+    private async Task<FinancialTransaction?> GetOwnedEntityAsync(
+        Guid transactionId,
+        System.Data.IDbConnection? connection = null,
+        System.Data.IDbTransaction? transaction = null,
+        CancellationToken cancellationToken = default)
+    {
+        var entity = await _db.GetByIdAsync<FinancialTransaction>(transactionId, connection, transaction, cancellationToken);
+        return entity?.UserId == _currentUser.UserId ? entity : null;
     }
 
     private async Task<IReadOnlyList<TransactionSplitDto>> GetSplitsAsync(Guid transactionId, CancellationToken cancellationToken)

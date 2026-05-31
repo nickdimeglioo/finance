@@ -1,4 +1,5 @@
 using System.Data;
+using System.Linq.Expressions;
 using FinanceTracker.Data.Contracts;
 
 namespace FinanceTracker.Api.Infrastructure.Data.SqlMapper;
@@ -10,6 +11,36 @@ public sealed class FinanceSqlMapperDataSession : IFinanceDataSession
     public FinanceSqlMapperDataSession(IOrmMapperService mapper)
     {
         _mapper = mapper;
+    }
+
+    public async Task<T?> GetByIdAsync<T>(
+        object id,
+        IDbConnection? connection = null,
+        IDbTransaction? transaction = null,
+        CancellationToken cancellationToken = default)
+        where T : class, new()
+    {
+        return await _mapper.GetByIdAsync<T>(id, connection, transaction);
+    }
+
+    public async Task<IReadOnlyList<T>> WhereAsync<T>(
+        Expression<Func<T, bool>> predicate,
+        IDbConnection? connection = null,
+        IDbTransaction? transaction = null,
+        CancellationToken cancellationToken = default)
+        where T : class, new()
+    {
+        return await _mapper.WhereAsync(predicate, connection, transaction);
+    }
+
+    public async Task<T?> FirstOrDefaultAsync<T>(
+        Expression<Func<T, bool>> predicate,
+        IDbConnection? connection = null,
+        IDbTransaction? transaction = null,
+        CancellationToken cancellationToken = default)
+        where T : class, new()
+    {
+        return await _mapper.FirstOrDefaultAsync(predicate, connection, transaction);
     }
 
     public async Task<IReadOnlyList<T>> QueryAsync<T>(

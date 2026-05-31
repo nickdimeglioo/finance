@@ -17,7 +17,7 @@ Use finance-specific ports so this app can run beside the pipeline project:
 
 - Frontend Vite dev server: `http://localhost:5273`
 - Backend ASP.NET Core API: `http://localhost:8353`
-- PostgreSQL local port: `5438`
+- PostgreSQL local port: `5432`
 - MinIO/S3 API: `http://localhost:9010`
 - MinIO console: `http://localhost:9011`
 

@@ -1,9 +1,31 @@
 using System.Data;
+using System.Linq.Expressions;
 
 namespace FinanceTracker.Data.Contracts;
 
 public interface IFinanceDataSession
 {
+    Task<T?> GetByIdAsync<T>(
+        object id,
+        IDbConnection? connection = null,
+        IDbTransaction? transaction = null,
+        CancellationToken cancellationToken = default)
+        where T : class, new();
+
+    Task<IReadOnlyList<T>> WhereAsync<T>(
+        Expression<Func<T, bool>> predicate,
+        IDbConnection? connection = null,
+        IDbTransaction? transaction = null,
+        CancellationToken cancellationToken = default)
+        where T : class, new();
+
+    Task<T?> FirstOrDefaultAsync<T>(
+        Expression<Func<T, bool>> predicate,
+        IDbConnection? connection = null,
+        IDbTransaction? transaction = null,
+        CancellationToken cancellationToken = default)
+        where T : class, new();
+
     Task<IReadOnlyList<T>> QueryAsync<T>(
         string sql,
         object? parameters = null,
@@ -48,4 +70,3 @@ public interface IFinanceDataSession
         Func<IDbConnection, IDbTransaction, Task<T>> work,
         CancellationToken cancellationToken = default);
 }
-

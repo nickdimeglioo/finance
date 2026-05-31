@@ -68,3 +68,13 @@ FT-P4-0008 - Remove direct OrmMapper calls from finance data session
 FT-P4-0009 - Add local shared-style UI component library
 FT-P4-0010 - Refactor finance pages to component library
 FT-P4-0011 - Align agent instructions with provided shared folder
+
+Phase 4 implementation
+----------------------
+FT-0401 - Create import schema, done in phase 4 implementation
+FT-0402 - Build S3 upload flow, done in phase 4 implementation
+FT-0403 - Build parsing and mapping, done in phase 4 implementation
+FT-0404 - Build preview and duplicate detection, done in phase 4 implementation
+FT-0405 - Build import commit, done in phase 4 implementation
+FT-0406 - Build import rules manager, done in phase 4 implementation
+FT-0407 - Build classification rules manager, done in phase 4 implementation

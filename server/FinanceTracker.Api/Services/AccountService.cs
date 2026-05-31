@@ -99,16 +99,7 @@ public sealed class AccountService
 
         return _db.ExecuteInTransactionAsync(async (connection, transaction) =>
         {
-            var account = await _db.QuerySingleOrDefaultAsync<Account>(
-                """
-                SELECT *
-                FROM accounts
-                WHERE user_id = @UserId AND id = @AccountId
-                """,
-                new { UserId = _currentUser.UserId, AccountId = accountId },
-                connection,
-                transaction,
-                cancellationToken);
+            var account = await GetOwnedAccountAsync(accountId, connection, transaction, cancellationToken);
 
             if (account is null)
             {
@@ -133,14 +124,7 @@ public sealed class AccountService
 
     public async Task<bool> ArchiveAsync(Guid accountId, CancellationToken cancellationToken)
     {
-        var account = await _db.QuerySingleOrDefaultAsync<Account>(
-            """
-            SELECT *
-            FROM accounts
-            WHERE user_id = @UserId AND id = @AccountId
-            """,
-            new { UserId = _currentUser.UserId, AccountId = accountId },
-            cancellationToken: cancellationToken);
+        var account = await GetOwnedAccountAsync(accountId, cancellationToken: cancellationToken);
 
         if (account is null)
         {
@@ -164,6 +148,16 @@ public sealed class AccountService
             cancellationToken);
 
         return detail ?? throw new InvalidOperationException("Account was not found after save.");
+    }
+
+    private async Task<Account?> GetOwnedAccountAsync(
+        Guid accountId,
+        System.Data.IDbConnection? connection = null,
+        System.Data.IDbTransaction? transaction = null,
+        CancellationToken cancellationToken = default)
+    {
+        var account = await _db.GetByIdAsync<Account>(accountId, connection, transaction, cancellationToken);
+        return account?.UserId == _currentUser.UserId ? account : null;
     }
 
     private static void ValidateAccount(string nickname, string type, string currency, decimal openingBalance, decimal? creditLimit, decimal? interestRate)
