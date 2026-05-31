@@ -1,0 +1,53 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.vs/
+*.swp
+*.swo
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.local
+appsettings.*.local.json
+secrets.json
+
+# Node / frontend
+node_modules/
+dist/
+build/
+coverage/
+playwright-report/
+test-results/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# .NET / backend
+bin/
+obj/
+TestResults/
+*.user
+*.suo
+*.rsuser
+*.nupkg
+.data-protection-keys/
+
+# Database / storage runtime data
+*.db
+*.sqlite
+*.sqlite3
+postgres-data/
+minio-data/
+storage/
+pipeline_storage/
+uploads/
+exports/
+
+# Liquibase local/runtime
+liquibase.local.properties
+*.log
