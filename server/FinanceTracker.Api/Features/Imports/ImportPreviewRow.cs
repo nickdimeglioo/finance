@@ -4,7 +4,7 @@ namespace FinanceTracker.Api.Features.Imports;
 public sealed class ImportPreviewRow
 {
     [PrimaryKey]
-    public Guid Id { get; set; }
+    public Guid Id { get; set; } = Guid.NewGuid();
 
     public Guid ImportBatchId { get; set; }
     public int RowNumber { get; set; }

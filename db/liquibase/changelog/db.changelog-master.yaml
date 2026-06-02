@@ -7,3 +7,5 @@ databaseChangeLog:
       file: changelog/002-phase-3-core-feature-support.sql
   - include:
       file: changelog/003-phase-4-imports-rules.sql
+  - include:
+      file: changelog/004-phase-4-cleanup-storage-rulesets.sql

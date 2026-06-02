@@ -18,7 +18,7 @@ Use finance-specific ports so this app can run beside the pipeline project:
 - Frontend Vite dev server: `http://localhost:5273`
 - Backend ASP.NET Core API: `http://localhost:8353`
 - PostgreSQL local port: `5432`
-- MinIO/S3 API: `http://localhost:9010`
+- MinIO/S3 API: `http://localhost:9000`
 - MinIO console: `http://localhost:9011`
 
 The pipeline template uses backend `8243` and common Vite/MinIO defaults, so avoid those ports here.
@@ -47,8 +47,11 @@ The pipeline template uses backend `8243` and common Vite/MinIO defaults, so avo
 - The in-repo SQL mapper lives at `server/SqlMapper`.
 - The application-facing data contract lives at `server/FinanceTracker.Data.Contracts` and is implemented in the API by `FinanceSqlMapperDataSession`.
 - API startup must register the local mapper runtime through `AddFinanceOrmMapper(...)`, which calls `SqlMapperRuntime.Configure(...)` before services query or save data. This sets underscore mapping, `DateOnly`/`TimeOnly`, JSON/JSONB handlers, and finance connection defaults.
+- Use the copied shared-style `OrmMapperService`, not a finance-specific emulation. Do not recreate `FinanceOrmMapperService`; extend `OrmMapperService`, `MultiTransaction`, or the SqlMapper project only when the ORM itself needs a reusable capability.
 - App code should depend on `IFinanceDataSession`. `FinanceSqlMapperDataSession` should delegate to `IOrmMapperService`; direct static `OrmMapper` calls should stay inside the mapper service/mapper project, and direct Dapper usage should stay inside the mapper project or mapper initialization code.
-- Prefer mapper-backed saves and transactions for mutations. Keep raw SQL only where it is an explicit query/projection at the data contract boundary or where query builders cannot express the projection cleanly.
+- Normal reads should use `QuerySelect<T>().From<TSource>().SelectAllFrom<TSource>()` plus typed `Where(...)`, `OrderBy(...)`, `Take(...)`, and `Skip(...)` clauses. `WhereAsync<T>` and `FirstOrDefaultAsync<T>` in `FinanceSqlMapperDataSession` must remain `QuerySelect` wrappers, not `QueryGet`/raw SQL wrappers.
+- Do not expose broad raw SQL methods from `IFinanceDataSession`. Raw SQL is acceptable only for exceptional diagnostics or a projection that the mapper cannot express after trying `QuerySelect` first.
+- Prefer mapper-backed saves/deletes and transactions for mutations. Use `SaveAsync`, `SaveBulkAsync`, `DeleteAsync`, `DeleteBulkAsync`, and `BeginMultiTransaction`/`MultiTransaction`; do not hand-roll connection/transaction lifecycles in services.
 - Use the existing auth/login/account infrastructure where possible. Do not create a finance-local users table unless the shared auth model requires a profile extension.
 - Use `IOrmMapperService`/SqlMapper for finance domain data unless the linked template establishes a different app-wide standard.
 - EF Core should remain primarily for auth/identity if that is how the reusable template is linked.
@@ -59,7 +62,24 @@ The pipeline template uses backend `8243` and common Vite/MinIO defaults, so avo
 - Money values must use fixed precision decimals, not floats/doubles.
 - Transaction dates should be `date`; audit timestamps should be `timestamptz`.
 - Flexible metadata should use `jsonb`.
+- Entity classes with a `Guid Id` primary key should initialize it with `Guid.NewGuid()`, and PostgreSQL UUID primary keys should default to `gen_random_uuid()` in Liquibase.
 - Prefer deterministic, explainable rules over hidden inference.
+
+## Mapper Attributes And DTO Mapping
+
+- SqlMapper model attributes available in `server/SqlMapper` include:
+  - `[TableName("table_name")]` on persisted entities.
+  - `[PrimaryKey]` on the primary key property.
+  - `[Column("column_name")]` when a property cannot rely on configured snake_case mapping.
+  - `[ForeignKey("foreign_key_column")]` for navigation properties that should persist through a foreign key column.
+  - `[SoftDelete("is_deleted")]` for ORM-managed soft delete fields.
+  - `[DBType(...)]` and `[Converter(...)]` for custom database/provider conversion.
+  - `[NotLoadable]`, `[NotSavable]`, `[NotDeletable]`, and `[NoDB]` to opt properties out of mapper operations.
+  - `[NoUpsert]`, `[FlattenInheritedProperties]`, `[Auditable]`, `[AuditSummary]`, `[AuditContext]`, `[RLS]`, and `[ResourcePermission]` exist for shared mapper behaviors; use them only when the entity actually participates in that concern.
+- Finance entity classes should be persisted entities only. Do not put DTO-only calculated values on entities unless they are backed by a real table column or marked `[NoDB]`.
+- DTO mapping should use `server/FinanceTracker.Api/Mapping/PropertyMapper.cs`. Prefer `entity.MapTo<Entity, Dto>()` and collection `MapToList<Entity, Dto>()` over manual DTO construction when property names line up.
+- Use `[MapFrom("SourcePropertyName")]` on DTO properties when the DTO name intentionally differs from the entity property. Keep DTO classes parameterless with settable properties when they are mapped by `PropertyMapper`.
+- Manual DTO construction is reserved for records, aggregate values, JSON parsing, or cases where the DTO is not a simple property projection.
 
 ## Database And Liquibase
 

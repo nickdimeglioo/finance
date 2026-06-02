@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { Ban, Save } from 'lucide-react';
 import { Button, EmptyState, Input, Select, StatusBadge, Table, type TableColumn } from '../components/ui';
+import { displayEnum } from '../lib/display';
 import { formatDate, formatMoney, toApiDate } from '../lib/financeFormat';
 import { useAccounts } from '../services/accountsService';
 import { createTransaction, createTransfer, updateTransactionStatus, useTransactions, voidTransaction } from '../services/transactionsService';
@@ -52,8 +53,8 @@ export function TransactionsPage() {
   const columns: TableColumn<TransactionListItemDto>[] = [
     { key: 'date', label: 'Date', render: (item) => formatDate(item.date) },
     { key: 'description', label: 'Description' },
-    { key: 'type', label: 'Type' },
-    { key: 'classification', label: 'Class' },
+    { key: 'type', label: 'Type', render: (item) => displayEnum(item.type) },
+    { key: 'classification', label: 'Class', render: (item) => displayEnum(item.classification) },
     {
       key: 'status',
       label: 'Status',
@@ -67,7 +68,7 @@ export function TransactionsPage() {
           }}
         >
           {statuses.map((status) => (
-            <option key={status} value={status}>{status}</option>
+            <option key={status} value={status}>{displayEnum(status)}</option>
           ))}
         </Select>
       )
@@ -97,7 +98,7 @@ export function TransactionsPage() {
             Void
           </Button>
         ) : (
-          <StatusBadge label="voided" tone="danger" />
+          <StatusBadge label="Voided" tone="danger" />
         )
     }
   ];
@@ -126,7 +127,7 @@ export function TransactionsPage() {
               ))}
             </Select>
             <Select label="Type" value={transaction.type} onChange={(event) => setTransaction({ ...transaction, type: event.target.value as TransactionType })}>
-              {types.map((type) => <option key={type} value={type}>{type}</option>)}
+              {types.map((type) => <option key={type} value={type}>{displayEnum(type)}</option>)}
             </Select>
           </>
         ) : (
@@ -168,7 +169,7 @@ export function TransactionsPage() {
             ? setTransfer({ ...transfer, classification: event.target.value as TransactionClassification })
             : setTransaction({ ...transaction, classification: event.target.value as TransactionClassification })}
         >
-          {classifications.map((classification) => <option key={classification} value={classification}>{classification}</option>)}
+          {classifications.map((classification) => <option key={classification} value={classification}>{displayEnum(classification)}</option>)}
         </Select>
         <Button type="submit" leftIcon={<Save size={15} />}>Save</Button>
         {message && <div className="notice error">{message}</div>}

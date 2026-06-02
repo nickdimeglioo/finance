@@ -1,23 +1,23 @@
 using FinanceTracker.Api.Features.Shared;
 using FinanceTracker.Api.Features.Transactions;
-using FinanceTracker.Data.Contracts;
+using PipelineRunner.Services;
 
 namespace FinanceTracker.Api.Services;
 
 public sealed class TransferService
 {
     private readonly ICurrentUserContext _currentUser;
-    private readonly IFinanceDataSession _db;
+    private readonly IOrmMapperService _db;
     private readonly TransactionService _transactionService;
 
-    public TransferService(ICurrentUserContext currentUser, IFinanceDataSession db, TransactionService transactionService)
+    public TransferService(ICurrentUserContext currentUser, IOrmMapperService db, TransactionService transactionService)
     {
         _currentUser = currentUser;
         _db = db;
         _transactionService = transactionService;
     }
 
-    public Task<TransactionDetailDto> CreateAsync(CreateTransferRequest request, CancellationToken cancellationToken)
+    public async Task<TransactionDetailDto> CreateAsync(CreateTransferRequest request, CancellationToken cancellationToken)
     {
         if (request.FromAccountId == request.ToAccountId)
         {
@@ -34,10 +34,13 @@ public sealed class TransferService
             throw new ArgumentException("Invalid classification.");
         }
 
-        return _db.ExecuteInTransactionAsync(async (connection, transaction) =>
+        await using var transaction = _db.BeginMultiTransaction();
+        transaction.Open();
+
+        try
         {
-            await _transactionService.EnsureAccountOwnedAsync(request.FromAccountId, connection, transaction, cancellationToken);
-            await _transactionService.EnsureAccountOwnedAsync(request.ToAccountId, connection, transaction, cancellationToken);
+            await _transactionService.EnsureAccountOwnedAsync(request.FromAccountId, transaction, cancellationToken);
+            await _transactionService.EnsureAccountOwnedAsync(request.ToAccountId, transaction, cancellationToken);
 
             var now = DateTimeOffset.UtcNow;
             var outId = Guid.NewGuid();
@@ -93,10 +96,16 @@ public sealed class TransferService
                 UpdatedAt = now
             };
 
-            await _db.SaveAsync(outgoing, _currentUser.UserId.ToString(), connection, transaction, cancellationToken);
-            await _db.SaveAsync(incoming, _currentUser.UserId.ToString(), connection, transaction, cancellationToken);
-            return await _transactionService.GetRequiredAsync(outId, connection, transaction, cancellationToken);
-        }, cancellationToken);
+            await transaction.Save(outgoing);
+            await transaction.Save(incoming);
+            var result = await _transactionService.GetRequiredAsync(outId, transaction, cancellationToken);
+            await transaction.CommitAsync();
+            return result;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 }
-

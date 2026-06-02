@@ -50,6 +50,7 @@ public sealed record ImportColumnMap(
 
 public sealed record PreviewImportRequest(
     ImportColumnMap ColumnMap,
+    Guid? RuleSetId,
     string? DateFormat,
     string? AmountFormat,
     bool SaveTemplate,

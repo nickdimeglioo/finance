@@ -1,15 +1,20 @@
-import { EmptyState, Table, type TableColumn } from '../components/ui';
+import { useState } from 'react';
+import { Checkbox, EmptyState, Table, type TableColumn } from '../components/ui';
+import { displayEnum } from '../lib/display';
 import { formatDate, formatMoney, monthRange } from '../lib/financeFormat';
+import { useAccounts } from '../services/accountsService';
 import { useDashboardSummary } from '../services/dashboardService';
 import type { TransactionListItemDto } from '../types/schema';
 
 export function DashboardPage() {
   const currentMonth = monthRange();
-  const { summary, loading, error } = useDashboardSummary(currentMonth.from, currentMonth.to);
+  const { accounts } = useAccounts();
+  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
+  const { summary, loading, error } = useDashboardSummary(currentMonth.from, currentMonth.to, selectedAccountIds);
   const columns: TableColumn<TransactionListItemDto>[] = [
     { key: 'date', label: 'Date', render: (transaction) => formatDate(transaction.date) },
     { key: 'description', label: 'Description' },
-    { key: 'type', label: 'Type' },
+    { key: 'type', label: 'Type', render: (transaction) => displayEnum(transaction.type) },
     {
       key: 'amount',
       label: 'Amount',
@@ -31,6 +36,28 @@ export function DashboardPage() {
 
       {error && <div className="notice error">{error.message}</div>}
       {loading && <div className="panel">Loading dashboard...</div>}
+
+      <div className="panel account-selector">
+        <div className="panel-header">
+          <h2>Dashboard Accounts</h2>
+          <button type="button" className="link-button" onClick={() => setSelectedAccountIds([])}>All accounts</button>
+        </div>
+        <div className="selector-grid">
+          {accounts.map((account) => (
+            <Checkbox
+              key={account.id}
+              label={`${account.nickname} · ${displayEnum(account.type)}`}
+              checked={selectedAccountIds.includes(account.id)}
+              onChange={(event) => {
+                setSelectedAccountIds((current) =>
+                  event.target.checked
+                    ? [...current, account.id]
+                    : current.filter((id) => id !== account.id));
+              }}
+            />
+          ))}
+        </div>
+      </div>
 
       <div className="metric-grid">
         <Metric label="Income" value={formatMoney(summary?.totalIncome ?? 0)} />

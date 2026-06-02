@@ -1,4 +1,5 @@
 using FinanceTracker.Api.Features.Imports;
+using FinanceTracker.Api.Features.Storage;
 using FinanceTracker.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -15,6 +16,22 @@ public sealed class ImportsController : ControllerBase
     public ImportsController(ImportService importService)
     {
         _importService = importService;
+    }
+
+    [HttpPost("from-storage")]
+    public async Task<ActionResult<UploadImportResponse>> FromStorage(
+        CreateImportFromStorageRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await _importService.CreateFromStorageAsync(request.AccountId, request.Institution, request.FileName, cancellationToken);
+            return CreatedAtAction(nameof(GetPreview), new { id = response.Id }, response);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpGet]

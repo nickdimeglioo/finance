@@ -1,16 +1,17 @@
 using System.Text.RegularExpressions;
 using FinanceTracker.Api.Features.Rules;
 using FinanceTracker.Api.Features.Shared;
-using FinanceTracker.Data.Contracts;
+using PipelineRunner.Services;
+using PipelineRunner.Utils;
 
 namespace FinanceTracker.Api.Services;
 
 public sealed class ImportRuleService
 {
     private readonly ICurrentUserContext _currentUser;
-    private readonly IFinanceDataSession _db;
+    private readonly IOrmMapperService _db;
 
-    public ImportRuleService(ICurrentUserContext currentUser, IFinanceDataSession db)
+    public ImportRuleService(ICurrentUserContext currentUser, IOrmMapperService db)
     {
         _currentUser = currentUser;
         _db = db;
@@ -22,6 +23,38 @@ public sealed class ImportRuleService
         return rules.Select(ToDto).ToList();
     }
 
+    public async Task<IReadOnlyList<ImportRuleSetDto>> ListRuleSetsAsync(CancellationToken cancellationToken)
+    {
+        var sets = await _db.QuerySelect<ImportRuleSet>()
+            .From<ImportRuleSet>()
+            .SelectAllFrom<ImportRuleSet>()
+            .Where(set => set.UserId == _currentUser.UserId)
+            .ToListAsync();
+        return sets.OrderBy(set => set.Name).Select(ToDto).ToList();
+    }
+
+    public async Task<ImportRuleSetDto> CreateRuleSetAsync(UpsertImportRuleSetRequest request, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            throw new ArgumentException("Rule set name is required.");
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var set = new ImportRuleSet
+        {
+            UserId = _currentUser.UserId,
+            Name = request.Name.Trim(),
+            Institution = EmptyToNull(request.Institution),
+            IsActive = request.IsActive,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+
+        await _db.SaveAsync(set, auditUserId: _currentUser.UserId.ToString());
+        return ToDto(set);
+    }
+
     public async Task<ImportRuleDto> CreateAsync(UpsertImportRuleRequest request, CancellationToken cancellationToken)
     {
         Validate(request);
@@ -30,8 +63,12 @@ public sealed class ImportRuleService
         {
             Id = Guid.NewGuid(),
             UserId = _currentUser.UserId,
+            RuleSetId = request.RuleSetId,
             Name = request.Name.Trim(),
-            Pattern = request.Pattern.Trim(),
+            Pattern = EmptyToNull(request.Pattern),
+            SourceField = EmptyToNull(request.SourceField),
+            TargetField = EmptyToNull(request.TargetField),
+            ValueTransform = string.IsNullOrWhiteSpace(request.ValueTransform) ? "copy" : request.ValueTransform,
             MapsToType = EmptyToNull(request.MapsToType),
             MapsToCategory = EmptyToNull(request.MapsToCategory),
             MapsToClassification = EmptyToNull(request.MapsToClassification),
@@ -42,7 +79,7 @@ public sealed class ImportRuleService
             UpdatedAt = now
         };
 
-        await _db.SaveAsync(rule, _currentUser.UserId.ToString(), cancellationToken: cancellationToken);
+        await _db.SaveAsync(rule, auditUserId: _currentUser.UserId.ToString());
         return ToDto(rule);
     }
 
@@ -56,7 +93,11 @@ public sealed class ImportRuleService
         }
 
         rule.Name = request.Name.Trim();
-        rule.Pattern = request.Pattern.Trim();
+        rule.RuleSetId = request.RuleSetId;
+        rule.Pattern = EmptyToNull(request.Pattern);
+        rule.SourceField = EmptyToNull(request.SourceField);
+        rule.TargetField = EmptyToNull(request.TargetField);
+        rule.ValueTransform = string.IsNullOrWhiteSpace(request.ValueTransform) ? "copy" : request.ValueTransform;
         rule.MapsToType = EmptyToNull(request.MapsToType);
         rule.MapsToCategory = EmptyToNull(request.MapsToCategory);
         rule.MapsToClassification = EmptyToNull(request.MapsToClassification);
@@ -65,7 +106,7 @@ public sealed class ImportRuleService
         rule.IsActive = request.IsActive;
         rule.UpdatedAt = DateTimeOffset.UtcNow;
 
-        await _db.SaveAsync(rule, _currentUser.UserId.ToString(), cancellationToken: cancellationToken);
+        await _db.SaveAsync(rule, auditUserId: _currentUser.UserId.ToString());
         return ToDto(rule);
     }
 
@@ -77,18 +118,21 @@ public sealed class ImportRuleService
             return false;
         }
 
-        await _db.ExecuteAsync("DELETE FROM import_rules WHERE id = @Id AND user_id = @UserId", new { Id = id, UserId = _currentUser.UserId }, cancellationToken: cancellationToken);
+        await _db.DeleteAsync(rule, userId: _currentUser.UserId.ToString());
         return true;
     }
 
     public async Task ReorderAsync(ReorderRulesRequest request, CancellationToken cancellationToken)
     {
-        await _db.ExecuteInTransactionAsync(async (connection, transaction) =>
+        await using var transaction = _db.BeginMultiTransaction();
+        transaction.Open();
+
+        try
         {
             var priority = 10;
             foreach (var id in request.RuleIds)
             {
-                var rule = await GetOwnedAsync(id, connection, transaction, cancellationToken);
+                var rule = await GetOwnedAsync(id, transaction, cancellationToken);
                 if (rule is null)
                 {
                     throw new ArgumentException("One or more import rules were not found.");
@@ -96,10 +140,17 @@ public sealed class ImportRuleService
 
                 rule.Priority = priority;
                 rule.UpdatedAt = DateTimeOffset.UtcNow;
-                await _db.SaveAsync(rule, _currentUser.UserId.ToString(), connection, transaction, cancellationToken);
+                await transaction.Save(rule);
                 priority += 10;
             }
-        }, cancellationToken);
+
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     public async Task<TestImportRuleResult> TestAsync(TestImportRuleRequest request, CancellationToken cancellationToken)
@@ -116,9 +167,38 @@ public sealed class ImportRuleService
 
     internal async Task<IReadOnlyList<ImportRule>> LoadRulesAsync(bool includeInactive, CancellationToken cancellationToken)
     {
-        var rules = await _db.WhereAsync<ImportRule>(rule => rule.UserId == _currentUser.UserId, cancellationToken: cancellationToken);
+        var rules = await _db.QuerySelect<ImportRule>()
+            .From<ImportRule>()
+            .SelectAllFrom<ImportRule>()
+            .Where(rule => rule.UserId == _currentUser.UserId)
+            .ToListAsync();
         return rules
             .Where(rule => includeInactive || rule.IsActive)
+            .OrderBy(rule => rule.Priority)
+            .ThenBy(rule => rule.Name)
+            .ToList();
+    }
+
+    internal async Task<IReadOnlyList<ImportRule>> LoadMappingRulesAsync(Guid? ruleSetId, CancellationToken cancellationToken)
+    {
+        if (ruleSetId is null)
+        {
+            return [];
+        }
+
+        var set = await _db.GetByIdAsync<ImportRuleSet>(ruleSetId.Value, depth: 0);
+        if (set?.UserId != _currentUser.UserId || !set.IsActive)
+        {
+            throw new ArgumentException("Import rule set was not found.");
+        }
+
+        var rules = await _db.QuerySelect<ImportRule>()
+            .From<ImportRule>()
+            .SelectAllFrom<ImportRule>()
+            .Where(rule => rule.UserId == _currentUser.UserId && rule.RuleSetId == ruleSetId.Value)
+            .ToListAsync();
+        return rules
+            .Where(rule => rule.IsActive && !string.IsNullOrWhiteSpace(rule.SourceField) && !string.IsNullOrWhiteSpace(rule.TargetField))
             .OrderBy(rule => rule.Priority)
             .ThenBy(rule => rule.Name)
             .ToList();
@@ -134,7 +214,7 @@ public sealed class ImportRuleService
 
         foreach (var rule in rules)
         {
-            if (!Regex.IsMatch(cleaned, rule.Pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            if (string.IsNullOrWhiteSpace(rule.Pattern) || !Regex.IsMatch(cleaned, rule.Pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
             {
                 continue;
             }
@@ -158,22 +238,38 @@ public sealed class ImportRuleService
 
     private async Task<ImportRule?> GetOwnedAsync(
         Guid id,
-        System.Data.IDbConnection? connection = null,
-        System.Data.IDbTransaction? transaction = null,
+        MultiTransaction? transaction = null,
         CancellationToken cancellationToken = default)
     {
-        var rule = await _db.GetByIdAsync<ImportRule>(id, connection, transaction, cancellationToken);
+        var rule = transaction is null
+            ? await _db.GetByIdAsync<ImportRule>(id, depth: 0)
+            : await transaction.GetByIdAsync<ImportRule>(id);
         return rule?.UserId == _currentUser.UserId ? rule : null;
     }
 
     private static void Validate(UpsertImportRuleRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.Pattern))
+        if (string.IsNullOrWhiteSpace(request.Name))
         {
-            throw new ArgumentException("Rule name and pattern are required.");
+            throw new ArgumentException("Rule name is required.");
         }
 
-        _ = new Regex(request.Pattern);
+        if (!string.IsNullOrWhiteSpace(request.Pattern))
+        {
+            _ = new Regex(request.Pattern);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.TargetField)
+            && !new[] { "date", "description", "merchant", "amount", "type", "category", "classification" }.Contains(request.TargetField))
+        {
+            throw new ArgumentException("Invalid target field.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.ValueTransform)
+            && !new[] { "copy", "amount_positive", "amount_negative" }.Contains(request.ValueTransform))
+        {
+            throw new ArgumentException("Invalid value transform.");
+        }
 
         if (!string.IsNullOrWhiteSpace(request.MapsToType) && !FinanceValues.TransactionTypes.Contains(request.MapsToType))
         {
@@ -195,8 +291,12 @@ public sealed class ImportRuleService
     {
         return new ImportRuleDto(
             rule.Id,
+            rule.RuleSetId,
             rule.Name,
             rule.Pattern,
+            rule.SourceField,
+            rule.TargetField,
+            rule.ValueTransform,
             rule.MapsToType,
             rule.MapsToCategory,
             rule.MapsToClassification,
@@ -205,6 +305,17 @@ public sealed class ImportRuleService
             rule.IsActive,
             rule.CreatedAt,
             rule.UpdatedAt);
+    }
+
+    private static ImportRuleSetDto ToDto(ImportRuleSet set)
+    {
+        return new ImportRuleSetDto(
+            set.Id,
+            set.Name,
+            set.Institution,
+            set.IsActive,
+            set.CreatedAt,
+            set.UpdatedAt);
     }
 }
 

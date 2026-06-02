@@ -4,5 +4,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
-</Project>
 
+  <ItemGroup>
+    <ProjectReference Include="..\SqlMapper\SqlMapper.csproj" />
+  </ItemGroup>
+</Project>

@@ -17,7 +17,7 @@ Reserved for this app so it can run beside the pipeline project:
 | Frontend Vite | `5273` |
 | Backend API | `8353` |
 | PostgreSQL | `5438` |
-| MinIO/S3 API | `9010` |
+| MinIO/S3 API | `9000` |
 | MinIO console | `9011` |
 
 ## Infrastructure Decisions
@@ -56,4 +56,3 @@ docker compose -f docker-compose.local.yml up -d
 ```
 
 The frontend source is present under `client/`, but Node/npm must be installed before running frontend install/build commands in this shell.
-

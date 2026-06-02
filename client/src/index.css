@@ -151,7 +151,7 @@ textarea {
 
 .split-panel {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: 1fr;
   gap: 18px;
 }
 
@@ -169,6 +169,26 @@ textarea {
   gap: 10px;
   align-items: end;
   margin-bottom: 12px;
+}
+
+.selector-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px 14px;
+}
+
+.link-button {
+  min-height: auto;
+  border: 0;
+  padding: 0;
+  color: var(--pm-create);
+  background: transparent;
+}
+
+.row-actions {
+  display: inline-flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 label {

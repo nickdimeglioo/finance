@@ -78,3 +78,12 @@ FT-0404 - Build preview and duplicate detection, done in phase 4 implementation
 FT-0405 - Build import commit, done in phase 4 implementation
 FT-0406 - Build import rules manager, done in phase 4 implementation
 FT-0407 - Build classification rules manager, done in phase 4 implementation
+
+Phase 4 cleanup
+---------------
+FT-P4-0012 - Add storage room workflow, done in phase 4 cleanup
+FT-P4-0013 - Add import rule sets and field mapping rules, done in phase 4 cleanup
+FT-P4-0014 - Add import rule edit/delete UI, done in phase 4 cleanup
+FT-P4-0015 - Move dashboard account selection to dashboard, done in phase 4 cleanup
+FT-P4-0016 - Add enum display labels, done in phase 4 cleanup
+FT-P4-0017 - Enforce GUID primary key defaults, done in phase 4 cleanup

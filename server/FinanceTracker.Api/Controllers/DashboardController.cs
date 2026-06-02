@@ -21,8 +21,9 @@ public sealed class DashboardController : ControllerBase
     public async Task<ActionResult<DashboardSummaryDto>> Summary(
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
+        [FromQuery] Guid[]? accountIds,
         CancellationToken cancellationToken)
     {
-        return Ok(await _dashboardService.GetSummaryAsync(from, to, cancellationToken));
+        return Ok(await _dashboardService.GetSummaryAsync(from, to, accountIds, cancellationToken));
     }
 }

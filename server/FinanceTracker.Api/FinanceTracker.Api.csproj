@@ -12,7 +12,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\FinanceTracker.Data.Contracts\FinanceTracker.Data.Contracts.csproj" />
     <ProjectReference Include="..\SqlMapper\SqlMapper.csproj" />
   </ItemGroup>
 </Project>

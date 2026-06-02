@@ -24,7 +24,7 @@ services:
       MINIO_ROOT_USER: finance
       MINIO_ROOT_PASSWORD: finance-minio-password
     ports:
-      - "9010:9000"
+      - "9000:9000"
       - "9011:9011"
     volumes:
       - finance-minio-data:/data
@@ -37,4 +37,3 @@ services:
 volumes:
   finance-postgres-data:
   finance-minio-data:
-

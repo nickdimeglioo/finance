@@ -2,57 +2,61 @@ using FinanceTracker.Api.Features.Shared;
 
 namespace FinanceTracker.Api.Features.Transactions;
 
-public sealed record TransactionListItemDto(
-    Guid Id,
-    Guid AccountId,
-    DateOnly Date,
-    DateOnly? PostedAt,
-    string Description,
-    string? Merchant,
-    string Type,
-    string Classification,
-    string? Category,
-    decimal Amount,
-    string Currency,
-    string Direction,
-    string Status,
-    string Source,
-    bool IsVoid,
-    bool IsSplit,
-    Guid? TransferPartnerId);
+public sealed class TransactionListItemDto
+{
+    public Guid Id { get; set; }
+    public Guid AccountId { get; set; }
+    public DateOnly Date { get; set; }
+    public DateOnly? PostedAt { get; set; }
+    public string Description { get; set; } = string.Empty;
+    public string? Merchant { get; set; }
+    public string Type { get; set; } = string.Empty;
+    public string Classification { get; set; } = string.Empty;
+    public string? Category { get; set; }
+    public decimal Amount { get; set; }
+    public string Currency { get; set; } = "USD";
+    public string Direction { get; set; } = "neutral";
+    public string Status { get; set; } = string.Empty;
+    public string Source { get; set; } = string.Empty;
+    public bool IsVoid { get; set; }
+    public bool IsSplit { get; set; }
+    public Guid? TransferPartnerId { get; set; }
+}
 
 public sealed class TransactionDetailDto
 {
-    public Guid Id { get; init; }
-    public Guid AccountId { get; init; }
-    public DateOnly Date { get; init; }
-    public DateOnly? PostedAt { get; init; }
-    public string Description { get; init; } = string.Empty;
-    public string? Merchant { get; init; }
-    public string Type { get; init; } = string.Empty;
-    public string Classification { get; init; } = string.Empty;
-    public string? Category { get; init; }
-    public decimal Amount { get; init; }
-    public string Currency { get; init; } = "USD";
-    public string Direction { get; init; } = "neutral";
-    public string Status { get; init; } = string.Empty;
-    public string Source { get; init; } = string.Empty;
-    public string? ImportHash { get; init; }
-    public bool IsVoid { get; init; }
-    public bool IsSplit { get; init; }
-    public Guid? TransferPartnerId { get; init; }
-    public Guid? RecurringRuleId { get; init; }
+    public Guid Id { get; set; }
+    public Guid AccountId { get; set; }
+    public DateOnly Date { get; set; }
+    public DateOnly? PostedAt { get; set; }
+    public string Description { get; set; } = string.Empty;
+    public string? Merchant { get; set; }
+    public string Type { get; set; } = string.Empty;
+    public string Classification { get; set; } = string.Empty;
+    public string? Category { get; set; }
+    public decimal Amount { get; set; }
+    public string Currency { get; set; } = "USD";
+    public string Direction { get; set; } = "neutral";
+    public string Status { get; set; } = string.Empty;
+    public string Source { get; set; } = string.Empty;
+    public string? ImportHash { get; set; }
+    public bool IsVoid { get; set; }
+    public bool IsSplit { get; set; }
+    public Guid? TransferPartnerId { get; set; }
+    public Guid? RecurringRuleId { get; set; }
     public IReadOnlyList<TransactionSplitDto> Splits { get; set; } = [];
-    public DateTimeOffset CreatedAt { get; init; }
-    public DateTimeOffset UpdatedAt { get; init; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
 }
 
-public sealed record TransactionSplitDto(
-    Guid Id,
-    string Category,
-    string Classification,
-    decimal Amount,
-    string? Notes);
+public sealed class TransactionSplitDto
+{
+    public Guid Id { get; set; }
+    public string Category { get; set; } = string.Empty;
+    public string Classification { get; set; } = "unknown";
+    public decimal Amount { get; set; }
+    public string? Notes { get; set; }
+}
 
 public sealed record CreateTransactionRequest(
     Guid AccountId,

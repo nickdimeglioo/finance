@@ -6,6 +6,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Dapper;
 
@@ -188,10 +189,11 @@ public class OrmQueryable<T> where T : class, new()
             Sql = sql,
             Parameters = parameters
         };
-        await OrmMapper.RunBeforeSelectInterceptorsAsync(context, selectQuery?.Interceptors);
-        var results = (await connection.QueryAsync<T>(sql, parameters, selectQuery?.CurrentTransaction)).ToList();
+        var cancellationToken = selectQuery?.CancellationToken ?? default;
+        await OrmMapper.RunBeforeSelectInterceptorsAsync(context, selectQuery?.Interceptors, cancellationToken);
+        var results = (await connection.QueryAsync<T>(new CommandDefinition(sql, parameters, selectQuery?.CurrentTransaction, cancellationToken: cancellationToken))).ToList();
         context.Result = results;
-        await OrmMapper.RunAfterSelectInterceptorsAsync(context, selectQuery?.Interceptors);
+        await OrmMapper.RunAfterSelectInterceptorsAsync(context, selectQuery?.Interceptors, cancellationToken);
         return results;
     }
 
@@ -208,10 +210,11 @@ public class OrmQueryable<T> where T : class, new()
             Sql = sql,
             Parameters = parameters
         };
-        await OrmMapper.RunBeforeSelectInterceptorsAsync(context, selectQuery?.Interceptors);
-        var results = (await OrmMapper.ExecuteMultiMappingQuery<T>(connection, sql, parameters, splitMapping, metadata, selectQuery?.CurrentTransaction)).ToList();
+        var cancellationToken = selectQuery?.CancellationToken ?? default;
+        await OrmMapper.RunBeforeSelectInterceptorsAsync(context, selectQuery?.Interceptors, cancellationToken);
+        var results = (await OrmMapper.ExecuteMultiMappingQuery<T>(connection, sql, parameters, splitMapping, metadata, selectQuery?.CurrentTransaction, cancellationToken)).ToList();
         context.Result = results;
-        await OrmMapper.RunAfterSelectInterceptorsAsync(context, selectQuery?.Interceptors);
+        await OrmMapper.RunAfterSelectInterceptorsAsync(context, selectQuery?.Interceptors, cancellationToken);
         return results;
     }
 
@@ -859,8 +862,7 @@ public static class OrmMapperExtensions
     public static bool IsSimpleType(this Type type)
     {
         return type.IsPrimitive || type.IsEnum || type == typeof(string) ||
-               type == typeof(DateTime) || type == typeof(DateOnly) || type == typeof(TimeOnly) ||
-               type == typeof(DateTimeOffset) || type == typeof(decimal) || type == typeof(Guid) ||
+               type == typeof(DateTime) || type == typeof(decimal) || type == typeof(Guid) ||
                (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>) &&
                 IsSimpleType(type.GetGenericArguments()[0]));
     }

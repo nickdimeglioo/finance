@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { Archive } from 'lucide-react';
-import { Button, Checkbox, EmptyState, Input, Select, StatusBadge, Table, type TableColumn } from '../components/ui';
+import { Button, EmptyState, Input, Select, StatusBadge, Table, type TableColumn } from '../components/ui';
+import { displayEnum } from '../lib/display';
 import { formatMoney } from '../lib/financeFormat';
 import { createAccount, archiveAccount, useAccounts } from '../services/accountsService';
 import type { AccountListItemDto, AccountType, CreateAccountRequest } from '../types/schema';
@@ -15,7 +16,6 @@ export function AccountsPage() {
     type: 'checking',
     currency: 'USD',
     openingBalance: 0,
-    includeInDashboard: true,
   });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -26,7 +26,7 @@ export function AccountsPage() {
     setMessage(null);
     try {
       await createAccount(form);
-      setForm({ nickname: '', institution: '', type: 'checking', currency: 'USD', openingBalance: 0, includeInDashboard: true });
+      setForm({ nickname: '', institution: '', type: 'checking', currency: 'USD', openingBalance: 0 });
       await reload();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Unable to create account.');
@@ -51,12 +51,12 @@ export function AccountsPage() {
         </>
       )
     },
-    { key: 'type', label: 'Type' },
+    { key: 'type', label: 'Type', render: (account) => displayEnum(account.type) },
     {
       key: 'status',
       label: 'Status',
       render: (account) => (
-        <StatusBadge label={account.status} tone={account.status === 'active' ? 'success' : 'neutral'} />
+        <StatusBadge label={displayEnum(account.status)} tone={account.status === 'active' ? 'success' : 'neutral'} />
       )
     },
     {
@@ -64,11 +64,6 @@ export function AccountsPage() {
       label: 'Balance',
       align: 'right',
       render: (account) => formatMoney(account.currentBalance, account.currency)
-    },
-    {
-      key: 'includeInDashboard',
-      label: 'Dashboard',
-      render: (account) => (account.includeInDashboard ? 'Yes' : 'No')
     },
     {
       key: 'actions',
@@ -88,7 +83,7 @@ export function AccountsPage() {
       <header className="page-header">
         <div>
           <h1 className="page-title">Accounts</h1>
-          <p className="page-subtitle">Balances, account status, and dashboard inclusion.</p>
+          <p className="page-subtitle">Balances and account status.</p>
         </div>
       </header>
 
@@ -98,7 +93,7 @@ export function AccountsPage() {
         <Select label="Type" value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value as AccountType })}>
           {accountTypes.map((type) => (
             <option key={type} value={type}>
-              {type}
+              {displayEnum(type)}
             </option>
           ))}
         </Select>
@@ -110,11 +105,6 @@ export function AccountsPage() {
           min="0"
           value={form.openingBalance}
           onChange={(event) => setForm({ ...form, openingBalance: Number(event.target.value) })}
-        />
-        <Checkbox
-          label="Include in dashboard"
-          checked={form.includeInDashboard}
-          onChange={(event) => setForm({ ...form, includeInDashboard: event.target.checked })}
         />
         <Button type="submit" loading={saving}>Add Account</Button>
         {message && <div className="notice error">{message}</div>}

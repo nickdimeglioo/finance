@@ -2,8 +2,12 @@ namespace FinanceTracker.Api.Features.Rules;
 
 public sealed record ImportRuleDto(
     Guid Id,
+    Guid? RuleSetId,
     string Name,
-    string Pattern,
+    string? Pattern,
+    string? SourceField,
+    string? TargetField,
+    string ValueTransform,
     string? MapsToType,
     string? MapsToCategory,
     string? MapsToClassification,
@@ -14,8 +18,12 @@ public sealed record ImportRuleDto(
     DateTimeOffset UpdatedAt);
 
 public sealed record UpsertImportRuleRequest(
+    Guid? RuleSetId,
     string Name,
-    string Pattern,
+    string? Pattern,
+    string? SourceField,
+    string? TargetField,
+    string? ValueTransform,
     string? MapsToType,
     string? MapsToCategory,
     string? MapsToClassification,
@@ -24,6 +32,19 @@ public sealed record UpsertImportRuleRequest(
     bool IsActive);
 
 public sealed record TestImportRuleRequest(string RawDescription);
+
+public sealed record ImportRuleSetDto(
+    Guid Id,
+    string Name,
+    string? Institution,
+    bool IsActive,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
+public sealed record UpsertImportRuleSetRequest(
+    string Name,
+    string? Institution,
+    bool IsActive);
 
 public sealed record TestImportRuleResult(
     string RawDescription,

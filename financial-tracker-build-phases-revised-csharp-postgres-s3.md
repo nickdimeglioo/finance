@@ -30,7 +30,7 @@ This plan intentionally does **not** rebuild generic infrastructure that already
   - Frontend Vite dev server: `5273`
   - Backend ASP.NET Core API: `8353`
   - PostgreSQL: `5432`
-  - MinIO/S3 API: `9010`
+  - MinIO/S3 API: `9000`
   - MinIO console: `9011`
 - Keep project work tracked in `task-board.csv` with these exact headers:
   `id,title,description,status,priority,effort,scope,phase,created_at,updated_at`

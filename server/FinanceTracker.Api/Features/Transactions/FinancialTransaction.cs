@@ -4,7 +4,7 @@ namespace FinanceTracker.Api.Features.Transactions;
 public sealed class FinancialTransaction
 {
     [PrimaryKey]
-    public Guid Id { get; set; }
+    public Guid Id { get; set; } = Guid.NewGuid();
 
     public Guid UserId { get; set; }
     public Guid AccountId { get; set; }
@@ -25,6 +25,7 @@ public sealed class FinancialTransaction
     public bool IsSplit { get; set; }
     public Guid? TransferPartnerId { get; set; }
     public Guid? RecurringRuleId { get; set; }
+    [DBType("jsonb")]
     public string Metadata { get; set; } = "{}";
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }

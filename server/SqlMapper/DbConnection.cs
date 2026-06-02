@@ -4,14 +4,15 @@ using Npgsql;
 
 public static class DbConnection
 {
-    private const string DefaultSystemConnection =
-        "Host=localhost;Port=5432;Database=finance_tracker;Username=postgres;Password=password";
+    private static readonly string DefaultSystemConnection =
+        "Host=localhost;Port=5432;Database=Pipeline;Username=postgres;Password=password";
 
-    private const string DefaultUsersConnection =
-        "Host=localhost;Port=5432;Database=finance_tracker;Username=app_user;Password=password";
+    private static readonly string DefaultUsersConnection =
+        "Host=localhost;Port=5432;Database=Pipeline;Username=app_user;Password=password";
 
-    private static string SystemConnectionString;
-    private static string UsersConnectionString;
+    // These will get initialized once when the class loads.
+    private static readonly string SystemConnectionString;
+    private static readonly string UsersConnectionString;
 
     static DbConnection()
     {
@@ -20,17 +21,6 @@ public static class DbConnection
 
         UsersConnectionString = Environment.GetEnvironmentVariable("USERS_DB_CONNECTION")
                                 ?? DefaultUsersConnection;
-    }
-
-    public static void Configure(string connectionString)
-    {
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            return;
-        }
-
-        SystemConnectionString = connectionString;
-        UsersConnectionString = connectionString;
     }
 
     public static IDbConnection SystemConnection
@@ -42,7 +32,7 @@ public static class DbConnection
         {
             var csb = new NpgsqlConnectionStringBuilder(UsersConnectionString)
             {
-                ApplicationName = "FinanceTracker.Api",
+                ApplicationName = "MyApp",
                 Timezone = "UTC"
             };
 

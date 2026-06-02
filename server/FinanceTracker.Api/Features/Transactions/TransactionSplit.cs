@@ -4,7 +4,7 @@ namespace FinanceTracker.Api.Features.Transactions;
 public sealed class TransactionSplit
 {
     [PrimaryKey]
-    public Guid Id { get; set; }
+    public Guid Id { get; set; } = Guid.NewGuid();
 
     public Guid TransactionId { get; set; }
     public string Category { get; set; } = string.Empty;
@@ -14,4 +14,3 @@ public sealed class TransactionSplit
     public string Metadata { get; set; } = "{}";
     public DateTimeOffset CreatedAt { get; set; }
 }
-

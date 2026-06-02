@@ -1,17 +1,18 @@
-using System.Text;
 using FinanceTracker.Api.Features.Shared;
 using FinanceTracker.Api.Features.Transactions;
-using FinanceTracker.Data.Contracts;
+using FinanceTracker.Api.Mapping;
+using PipelineRunner.Services;
+using PipelineRunner.Utils;
 
 namespace FinanceTracker.Api.Services;
 
 public sealed class TransactionService
 {
     private readonly ICurrentUserContext _currentUser;
-    private readonly IFinanceDataSession _db;
+    private readonly IOrmMapperService _db;
     private readonly ClassificationRuleService _classificationRules;
 
-    public TransactionService(ICurrentUserContext currentUser, IFinanceDataSession db, ClassificationRuleService classificationRules)
+    public TransactionService(ICurrentUserContext currentUser, IOrmMapperService db, ClassificationRuleService classificationRules)
     {
         _currentUser = currentUser;
         _db = db;
@@ -22,35 +23,30 @@ public sealed class TransactionService
     {
         var page = Math.Max(filters.Page, 1);
         var pageSize = Math.Clamp(filters.PageSize, 1, 250);
-        var where = BuildWhere(filters);
-        var parameters = BuildParameters(filters, page, pageSize);
-
-        var total = await _db.QuerySingleAsync<long>($"SELECT COUNT(*) FROM transactions t {where}", parameters, cancellationToken: cancellationToken);
-        var items = await _db.QueryAsync<TransactionListItemDto>(
-            TransactionSql.SelectList + where + " ORDER BY t.date DESC, t.created_at DESC OFFSET @Offset LIMIT @PageSize",
-            parameters,
-            cancellationToken: cancellationToken);
+        var filtered = await LoadFilteredTransactionsAsync(filters, cancellationToken: cancellationToken);
+        var total = filtered.Count;
+        var items = filtered
+            .OrderByDescending(transaction => transaction.Date)
+            .ThenByDescending(transaction => transaction.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .MapToList<FinancialTransaction, TransactionListItemDto>();
 
         return new PagedResult<TransactionListItemDto>(items, page, pageSize, total);
     }
 
     public async Task<TransactionDetailDto?> GetAsync(Guid transactionId, CancellationToken cancellationToken)
     {
-        var detail = await _db.QuerySingleOrDefaultAsync<TransactionDetailDto>(
-            TransactionSql.SelectDetail + " WHERE t.user_id = @UserId AND t.id = @TransactionId",
-            new { UserId = _currentUser.UserId, TransactionId = transactionId },
-            cancellationToken: cancellationToken);
-
-        if (detail is null)
+        var entity = await GetOwnedEntityAsync(transactionId, cancellationToken: cancellationToken);
+        if (entity is null)
         {
             return null;
         }
 
-        detail.Splits = await GetSplitsAsync(transactionId, cancellationToken);
-        return detail;
+        return await ToDetailDtoAsync(entity, cancellationToken: cancellationToken);
     }
 
-    public Task<TransactionDetailDto> CreateAsync(CreateTransactionRequest request, CancellationToken cancellationToken)
+    public async Task<TransactionDetailDto> CreateAsync(CreateTransactionRequest request, CancellationToken cancellationToken)
     {
         ValidateTransaction(request.Type, request.Classification, request.Amount, request.Currency, request.Splits);
         if (request.Type == "transfer")
@@ -58,9 +54,12 @@ public sealed class TransactionService
             throw new ArgumentException("Use the transfer endpoint to create transfer transactions.");
         }
 
-        return _db.ExecuteInTransactionAsync(async (connection, transaction) =>
+        await using var transaction = _db.BeginMultiTransaction();
+        transaction.Open();
+
+        try
         {
-            await EnsureAccountOwnedAsync(request.AccountId, connection, transaction, cancellationToken);
+            await EnsureAccountOwnedAsync(request.AccountId, transaction, cancellationToken);
             var now = DateTimeOffset.UtcNow;
             var entity = new FinancialTransaction
             {
@@ -87,22 +86,32 @@ public sealed class TransactionService
             };
 
             await _classificationRules.ApplyToTransactionAsync(entity, cancellationToken);
-            await _db.SaveAsync(entity, _currentUser.UserId.ToString(), connection, transaction, cancellationToken);
-            await ReplaceSplitsAsync(entity.Id, request.Splits, connection, transaction, cancellationToken);
-            return await GetRequiredAsync(entity.Id, connection, transaction, cancellationToken);
-        }, cancellationToken);
+            await transaction.Save(entity);
+            await ReplaceSplitsAsync(entity.Id, request.Splits, transaction, cancellationToken);
+            var result = await GetRequiredAsync(entity.Id, transaction, cancellationToken);
+            await transaction.CommitAsync();
+            return result;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
-    public Task<TransactionDetailDto?> UpdateAsync(Guid transactionId, UpdateTransactionRequest request, CancellationToken cancellationToken)
+    public async Task<TransactionDetailDto?> UpdateAsync(Guid transactionId, UpdateTransactionRequest request, CancellationToken cancellationToken)
     {
         if (!FinanceValues.TransactionStatuses.Contains(request.Status))
         {
             throw new ArgumentException("Invalid transaction status.");
         }
 
-        return _db.ExecuteInTransactionAsync(async (connection, transaction) =>
+        await using var transaction = _db.BeginMultiTransaction();
+        transaction.Open();
+
+        try
         {
-            var entity = await GetEntityForUpdateAsync(transactionId, connection, transaction, cancellationToken);
+            var entity = await GetEntityForUpdateAsync(transactionId, transaction, cancellationToken);
             if (entity is null)
             {
                 return null;
@@ -114,7 +123,7 @@ public sealed class TransactionService
             }
 
             ValidateTransaction(entity.Type, request.Classification, request.Amount, request.Currency, request.Splits);
-            await EnsureAccountOwnedAsync(entity.AccountId, connection, transaction, cancellationToken);
+            await EnsureAccountOwnedAsync(entity.AccountId, transaction, cancellationToken);
             entity.Date = request.Date;
             entity.PostedAt = request.PostedAt;
             entity.Description = request.Description.Trim();
@@ -130,37 +139,53 @@ public sealed class TransactionService
             entity.UpdatedAt = DateTimeOffset.UtcNow;
 
             await _classificationRules.ApplyToTransactionAsync(entity, cancellationToken);
-            await _db.SaveAsync(entity, _currentUser.UserId.ToString(), connection, transaction, cancellationToken);
-            await ReplaceSplitsAsync(entity.Id, request.Splits, connection, transaction, cancellationToken);
-            return await GetRequiredAsync(entity.Id, connection, transaction, cancellationToken);
-        }, cancellationToken);
+            await transaction.Save(entity);
+            await ReplaceSplitsAsync(entity.Id, request.Splits, transaction, cancellationToken);
+            var result = await GetRequiredAsync(entity.Id, transaction, cancellationToken);
+            await transaction.CommitAsync();
+            return result;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     public async Task<bool> VoidAsync(Guid transactionId, bool includeTransferPartner, CancellationToken cancellationToken)
     {
-        return await _db.ExecuteInTransactionAsync(async (connection, transaction) =>
+        await using var transaction = _db.BeginMultiTransaction();
+        transaction.Open();
+
+        try
         {
-            var entity = await GetEntityForUpdateAsync(transactionId, connection, transaction, cancellationToken);
+            var entity = await GetEntityForUpdateAsync(transactionId, transaction, cancellationToken);
             if (entity is null)
             {
                 return false;
             }
 
             MarkVoided(entity);
-            await _db.SaveAsync(entity, _currentUser.UserId.ToString(), connection, transaction, cancellationToken);
+            await transaction.Save(entity);
 
             if (includeTransferPartner && entity.TransferPartnerId is Guid partnerId)
             {
-                var partner = await GetEntityForUpdateAsync(partnerId, connection, transaction, cancellationToken);
+                var partner = await GetEntityForUpdateAsync(partnerId, transaction, cancellationToken);
                 if (partner is not null)
                 {
                     MarkVoided(partner);
-                    await _db.SaveAsync(partner, _currentUser.UserId.ToString(), connection, transaction, cancellationToken);
+                    await transaction.Save(partner);
                 }
             }
 
+            await transaction.CommitAsync();
             return true;
-        }, cancellationToken);
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     public async Task<TransactionDetailDto?> UpdateStatusAsync(Guid transactionId, string status, CancellationToken cancellationToken)
@@ -180,14 +205,14 @@ public sealed class TransactionService
         entity.Status = status;
         entity.IsVoid = status == "voided";
         entity.UpdatedAt = DateTimeOffset.UtcNow;
-        await _db.SaveAsync(entity, _currentUser.UserId.ToString(), cancellationToken: cancellationToken);
+        await _db.SaveAsync(entity, auditUserId: _currentUser.UserId.ToString());
 
         return await GetAsync(transactionId, cancellationToken);
     }
 
-    internal async Task EnsureAccountOwnedAsync(Guid accountId, System.Data.IDbConnection connection, System.Data.IDbTransaction transaction, CancellationToken cancellationToken)
+    internal async Task EnsureAccountOwnedAsync(Guid accountId, MultiTransaction transaction, CancellationToken cancellationToken)
     {
-        var account = await _db.GetByIdAsync<FinanceTracker.Api.Features.Accounts.Account>(accountId, connection, transaction, cancellationToken);
+        var account = await transaction.GetByIdAsync<FinanceTracker.Api.Features.Accounts.Account>(accountId);
 
         if (account?.UserId != _currentUser.UserId)
         {
@@ -195,57 +220,57 @@ public sealed class TransactionService
         }
     }
 
-    internal async Task<TransactionDetailDto> GetRequiredAsync(Guid transactionId, System.Data.IDbConnection connection, System.Data.IDbTransaction transaction, CancellationToken cancellationToken)
+    internal async Task<TransactionDetailDto> GetRequiredAsync(Guid transactionId, MultiTransaction transaction, CancellationToken cancellationToken)
     {
-        var detail = await _db.QuerySingleOrDefaultAsync<TransactionDetailDto>(
-            TransactionSql.SelectDetail + " WHERE t.user_id = @UserId AND t.id = @TransactionId",
-            new { UserId = _currentUser.UserId, TransactionId = transactionId },
-            connection,
-            transaction,
-            cancellationToken);
-
-        if (detail is null)
+        var entity = await GetOwnedEntityAsync(transactionId, transaction, cancellationToken);
+        if (entity is null)
         {
             throw new InvalidOperationException("Transaction was not found after save.");
         }
 
-        var splits = await _db.QueryAsync<TransactionSplitDto>(
-            TransactionSql.SelectSplits,
-            new { TransactionId = transactionId },
-            connection,
-            transaction,
-            cancellationToken);
-
-        detail.Splits = splits;
-        return detail;
+        return await ToDetailDtoAsync(entity, transaction, cancellationToken);
     }
 
-    private async Task<FinancialTransaction?> GetEntityForUpdateAsync(Guid transactionId, System.Data.IDbConnection connection, System.Data.IDbTransaction transaction, CancellationToken cancellationToken)
+    private async Task<FinancialTransaction?> GetEntityForUpdateAsync(Guid transactionId, MultiTransaction transaction, CancellationToken cancellationToken)
     {
-        return await GetOwnedEntityAsync(transactionId, connection, transaction, cancellationToken);
+        return await GetOwnedEntityAsync(transactionId, transaction, cancellationToken);
     }
 
     private async Task<FinancialTransaction?> GetOwnedEntityAsync(
         Guid transactionId,
-        System.Data.IDbConnection? connection = null,
-        System.Data.IDbTransaction? transaction = null,
+        MultiTransaction? transaction = null,
         CancellationToken cancellationToken = default)
     {
-        var entity = await _db.GetByIdAsync<FinancialTransaction>(transactionId, connection, transaction, cancellationToken);
+        var entity = transaction is null
+            ? await _db.GetByIdAsync<FinancialTransaction>(transactionId, depth: 0)
+            : await transaction.GetByIdAsync<FinancialTransaction>(transactionId);
         return entity?.UserId == _currentUser.UserId ? entity : null;
     }
 
     private async Task<IReadOnlyList<TransactionSplitDto>> GetSplitsAsync(Guid transactionId, CancellationToken cancellationToken)
     {
-        return await _db.QueryAsync<TransactionSplitDto>(
-            TransactionSql.SelectSplits,
-            new { TransactionId = transactionId },
-            cancellationToken: cancellationToken);
+        var splits = await _db.QuerySelect<TransactionSplit>()
+            .From<TransactionSplit>()
+            .SelectAllFrom<TransactionSplit>()
+            .Where(split => split.TransactionId == transactionId)
+            .ToListAsync();
+        return splits
+            .OrderBy(split => split.CreatedAt)
+            .ThenBy(split => split.Id)
+            .MapToList<TransactionSplit, TransactionSplitDto>();
     }
 
-    private async Task ReplaceSplitsAsync(Guid transactionId, IReadOnlyList<CreateTransactionSplitRequest>? splits, System.Data.IDbConnection connection, System.Data.IDbTransaction transaction, CancellationToken cancellationToken)
+    private async Task ReplaceSplitsAsync(Guid transactionId, IReadOnlyList<CreateTransactionSplitRequest>? splits, MultiTransaction transaction, CancellationToken cancellationToken)
     {
-        await _db.ExecuteAsync("DELETE FROM transaction_splits WHERE transaction_id = @TransactionId", new { TransactionId = transactionId }, connection, transaction, cancellationToken);
+        var existingSplits = await transaction.QuerySelect<TransactionSplit>()
+            .From<TransactionSplit>()
+            .SelectAllFrom<TransactionSplit>()
+            .Where(split => split.TransactionId == transactionId)
+            .ToListAsync();
+        foreach (var existingSplit in existingSplits)
+        {
+            await transaction.Delete(existingSplit);
+        }
 
         if (splits is null || splits.Count == 0)
         {
@@ -266,7 +291,7 @@ public sealed class TransactionService
                 Metadata = "{}",
                 CreatedAt = now
             };
-            await _db.SaveAsync(entity, _currentUser.UserId.ToString(), connection, transaction, cancellationToken);
+            await transaction.Save(entity);
         }
     }
 
@@ -324,103 +349,99 @@ public sealed class TransactionService
         };
     }
 
-    private object BuildParameters(TransactionFiltersRequest filters, int page, int pageSize)
+    private async Task<List<FinancialTransaction>> LoadFilteredTransactionsAsync(
+        TransactionFiltersRequest filters,
+        MultiTransaction? transaction = null,
+        CancellationToken cancellationToken = default)
     {
-        return new
+        var query = (transaction is null
+                ? _db.QuerySelect<FinancialTransaction>()
+                : transaction.QuerySelect<FinancialTransaction>())
+            .From<FinancialTransaction>("t")
+            .SelectAllFrom<FinancialTransaction>("t")
+            .Where<FinancialTransaction>(row => row.UserId == _currentUser.UserId, "t");
+
+        if (!filters.IncludeVoided)
         {
-            UserId = _currentUser.UserId,
-            filters.AccountId,
-            filters.Type,
-            filters.Classification,
-            filters.Category,
-            filters.Status,
-            From = filters.From,//?.ToDateTime(TimeOnly.MinValue),
-            To = filters.To,//?.ToDateTime(TimeOnly.MinValue),
-            filters.AmountMin,
-            filters.AmountMax,
-            Search = string.IsNullOrWhiteSpace(filters.Search) ? null : $"%{filters.Search.Trim()}%",
-            filters.IncludeVoided,
-            Offset = (page - 1) * pageSize,
-            PageSize = pageSize
-        };
+            query.Where<FinancialTransaction>(row => row.IsVoid == false, "t");
+        }
+
+        if (filters.AccountId is Guid accountId)
+        {
+            query.Where<FinancialTransaction>(row => row.AccountId == accountId, "t");
+        }
+
+        if (!string.IsNullOrWhiteSpace(filters.Type))
+        {
+            var type = filters.Type;
+            query.Where<FinancialTransaction>(row => row.Type == type, "t");
+        }
+
+        if (!string.IsNullOrWhiteSpace(filters.Classification))
+        {
+            var classification = filters.Classification;
+            query.Where<FinancialTransaction>(row => row.Classification == classification, "t");
+        }
+
+        if (!string.IsNullOrWhiteSpace(filters.Category))
+        {
+            var category = filters.Category;
+            query.Where<FinancialTransaction>(row => row.Category == category, "t");
+        }
+
+        if (!string.IsNullOrWhiteSpace(filters.Status))
+        {
+            var status = filters.Status;
+            query.Where<FinancialTransaction>(row => row.Status == status, "t");
+        }
+
+        if (filters.From is DateOnly from)
+        {
+            query.Where<FinancialTransaction>(row => row.Date >= from, "t");
+        }
+
+        if (filters.To is DateOnly to)
+        {
+            query.Where<FinancialTransaction>(row => row.Date <= to, "t");
+        }
+
+        if (filters.AmountMin is decimal amountMin)
+        {
+            query.Where<FinancialTransaction>(row => row.Amount >= amountMin, "t");
+        }
+
+        if (filters.AmountMax is decimal amountMax)
+        {
+            query.Where<FinancialTransaction>(row => row.Amount <= amountMax, "t");
+        }
+
+        if (!string.IsNullOrWhiteSpace(filters.Search))
+        {
+            var search = filters.Search.Trim();
+            query.Where<FinancialTransaction>(row => row.Description.Contains(search) || row.Merchant!.Contains(search), "t");
+        }
+
+        return await query.ToListAsync();
     }
 
-    private static string BuildWhere(TransactionFiltersRequest filters)
+    private async Task<TransactionDetailDto> ToDetailDtoAsync(
+        FinancialTransaction entity,
+        MultiTransaction? transaction = null,
+        CancellationToken cancellationToken = default)
     {
-        var builder = new StringBuilder(
-            """
-            WHERE t.user_id = @UserId
-              AND (@IncludeVoided OR t.is_void = false)
-              AND (@AccountId IS NULL OR t.account_id = @AccountId)
-              AND (@Type IS NULL OR t.type = @Type)
-              AND (@Classification IS NULL OR t.classification = @Classification)
-              AND (@Category IS NULL OR t.category = @Category)
-              AND (@Status IS NULL OR t.status = @Status)
-              AND (@From::date IS NULL OR t.date >= @From::date)
-              AND (@To::date IS NULL OR t.date <= @To::date)
-              AND (@AmountMin IS NULL OR t.amount >= @AmountMin)
-              AND (@AmountMax IS NULL OR t.amount <= @AmountMax)
-              AND (@Search IS NULL OR t.description ILIKE @Search OR t.merchant ILIKE @Search) 
-            """);
-
-        return builder.ToString();
+        var detail = entity.MapTo<FinancialTransaction, TransactionDetailDto>();
+        var query = transaction is null
+            ? _db.QuerySelect<TransactionSplit>()
+            : transaction.QuerySelect<TransactionSplit>();
+        var splits = await query
+            .From<TransactionSplit>()
+            .SelectAllFrom<TransactionSplit>()
+            .Where(split => split.TransactionId == entity.Id)
+            .ToListAsync();
+        detail.Splits = splits
+            .OrderBy(split => split.CreatedAt)
+            .ThenBy(split => split.Id)
+            .MapToList<TransactionSplit, TransactionSplitDto>();
+        return detail;
     }
-}
-
-internal static class TransactionSql
-{
-    public const string SelectList = """
-        SELECT
-            t.id,
-            t.account_id,
-            t.date,
-            t.posted_at,
-            t.description,
-            t.merchant,
-            t.type,
-            t.classification,
-            t.category,
-            t.amount,
-            t.currency,
-            t.direction,
-            t.status,
-            t.source,
-            t.is_void,
-            t.is_split,
-            t.transfer_partner_id
-        FROM transactions t 
-        """;
-
-    public const string SelectDetail = """
-        SELECT
-            t.id,
-            t.account_id,
-            t.date,
-            t.posted_at,
-            t.description,
-            t.merchant,
-            t.type,
-            t.classification,
-            t.category,
-            t.amount,
-            t.currency,
-            t.direction,
-            t.status,
-            t.source,
-            t.import_hash,
-            t.is_void,
-            t.is_split,
-            t.transfer_partner_id,
-            t.recurring_rule_id,
-            t.created_at,
-            t.updated_at
-        FROM transactions t 
-        """;
-
-    public const string SelectSplits = """
-        SELECT id, category, classification, amount, notes
-        FROM transaction_splits
-        WHERE transaction_id = @TransactionId
-        ORDER BY created_at, id 
-        """;
 }

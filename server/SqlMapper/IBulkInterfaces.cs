@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Threading;
 using System.Threading.Tasks;
 
 public interface IBulkDialect
@@ -37,6 +38,7 @@ public class BulkSaveOptions
     public IDbTransaction? Transaction { get; set; }
     public HashSet<string> SpecificColumns { get; set; } = null; // null = all
     public IReadOnlyList<IDbInterceptor>? Interceptors { get; set; }
+    public CancellationToken CancellationToken { get; set; } = default;
     public AuditConfig Audit { get; set; }
     public string AuditUserId { get; set; } = "System";
 }

@@ -6,6 +6,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Dapper;
 
@@ -276,10 +277,11 @@ public class OrmSelectQueryable<T> where T : class, new()
                 Sql = sql,
                 Parameters = _parameters
             };
-            await OrmMapper.RunBeforeSelectInterceptorsAsync(context, effectiveSelectQuery?.Interceptors);
-            var rows = (await OrmMapper.ExecuteMultiMappingQuery<T>(connection, sql, _parameters, [], classMetadata, transaction)).ToList();
+            var cancellationToken = effectiveSelectQuery?.CancellationToken ?? default;
+            await OrmMapper.RunBeforeSelectInterceptorsAsync(context, effectiveSelectQuery?.Interceptors, cancellationToken);
+            var rows = (await OrmMapper.ExecuteMultiMappingQuery<T>(connection, sql, _parameters, [], classMetadata, transaction, cancellationToken)).ToList();
             context.Result = rows;
-            await OrmMapper.RunAfterSelectInterceptorsAsync(context, effectiveSelectQuery?.Interceptors);
+            await OrmMapper.RunAfterSelectInterceptorsAsync(context, effectiveSelectQuery?.Interceptors, cancellationToken);
             //var rows = await connection.QueryAsync<T>(sql, _parameters, transaction);
             return rows;
         }, effectiveSelectQuery);
@@ -302,10 +304,11 @@ public class OrmSelectQueryable<T> where T : class, new()
                     Sql = sql,
                     Parameters = _parameters
                 };
-                await OrmMapper.RunBeforeSelectInterceptorsAsync(context, effectiveSelectQuery?.Interceptors);
-                var rows = (await OrmMapper.ExecuteMultiMappingQuery<T>(connection, sql, _parameters, [], classMetadata, transaction)).ToList();
+                var cancellationToken = effectiveSelectQuery?.CancellationToken ?? default;
+                await OrmMapper.RunBeforeSelectInterceptorsAsync(context, effectiveSelectQuery?.Interceptors, cancellationToken);
+                var rows = (await OrmMapper.ExecuteMultiMappingQuery<T>(connection, sql, _parameters, [], classMetadata, transaction, cancellationToken)).ToList();
                 context.Result = rows;
-                await OrmMapper.RunAfterSelectInterceptorsAsync(context, effectiveSelectQuery?.Interceptors);
+                await OrmMapper.RunAfterSelectInterceptorsAsync(context, effectiveSelectQuery?.Interceptors, cancellationToken);
                 //connection.QueryFirstOrDefaultAsync<T>(sql, _parameters, transaction)
                 return rows.FirstOrDefault();
              },
@@ -325,10 +328,11 @@ public class OrmSelectQueryable<T> where T : class, new()
                 Sql = sql,
                 Parameters = _parameters
             };
-            await OrmMapper.RunBeforeSelectInterceptorsAsync(context, effectiveSelectQuery?.Interceptors);
-            var result = await connection.ExecuteScalarAsync<bool>(sql, _parameters, transaction);
+            var cancellationToken = effectiveSelectQuery?.CancellationToken ?? default;
+            await OrmMapper.RunBeforeSelectInterceptorsAsync(context, effectiveSelectQuery?.Interceptors, cancellationToken);
+            var result = await connection.ExecuteScalarAsync<bool>(new CommandDefinition(sql, _parameters, transaction, cancellationToken: cancellationToken));
             context.Result = result;
-            await OrmMapper.RunAfterSelectInterceptorsAsync(context, effectiveSelectQuery?.Interceptors);
+            await OrmMapper.RunAfterSelectInterceptorsAsync(context, effectiveSelectQuery?.Interceptors, cancellationToken);
             return result;
         }, effectiveSelectQuery);
     }
@@ -671,7 +675,9 @@ public class OrmSelectQueryable<T> where T : class, new()
                 return property.ColumnName;
         }
 
-        return OrmMapper.ToSnakeCase(propertyName);
+        return metadata == null
+            ? OrmMapper.ApplyNamingConvention(propertyName, OrmMapper.Options.ColumnStyle)
+            : OrmMapper.GetDefaultColumnName(metadata, propertyName);
     }
 
     private static IEnumerable<KeyValuePair<string, object?>> ExtractParameters(object parameters)

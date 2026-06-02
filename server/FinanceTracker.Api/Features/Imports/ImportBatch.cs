@@ -4,7 +4,7 @@ namespace FinanceTracker.Api.Features.Imports;
 public sealed class ImportBatch
 {
     [PrimaryKey]
-    public Guid Id { get; set; }
+    public Guid Id { get; set; } = Guid.NewGuid();
 
     public Guid UserId { get; set; }
     public Guid AccountId { get; set; }

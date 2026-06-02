@@ -1,81 +1,80 @@
 using FinanceTracker.Api.Features.Dashboard;
 using FinanceTracker.Api.Features.Transactions;
-using FinanceTracker.Data.Contracts;
+using FinanceTracker.Api.Mapping;
+using PipelineRunner.Services;
 
 namespace FinanceTracker.Api.Services;
 
 public sealed class DashboardService
 {
     private readonly ICurrentUserContext _currentUser;
-    private readonly IFinanceDataSession _db;
+    private readonly IOrmMapperService _db;
 
-    public DashboardService(ICurrentUserContext currentUser, IFinanceDataSession db)
+    public DashboardService(ICurrentUserContext currentUser, IOrmMapperService db)
     {
         _currentUser = currentUser;
         _db = db;
     }
 
-    public async Task<DashboardSummaryDto> GetSummaryAsync(DateOnly? from, DateOnly? to, CancellationToken cancellationToken)
+    public async Task<DashboardSummaryDto> GetSummaryAsync(DateOnly? from, DateOnly? to, IReadOnlyCollection<Guid>? accountIds, CancellationToken cancellationToken)
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var rangeFrom = from ?? new DateOnly(today.Year, today.Month, 1);
         var rangeTo = to ?? rangeFrom.AddMonths(1).AddDays(-1);
+        var selectedAccountIds = accountIds?.Where(id => id != Guid.Empty).Distinct().ToArray() ?? [];
+        var filterAccounts = selectedAccountIds.Length > 0;
 
-        var totals = await _db.QuerySingleAsync<DashboardTotals>(
-            """
-            SELECT
-                COALESCE(SUM(CASE WHEN type = 'income' AND is_void = false AND date BETWEEN @From AND @To THEN amount ELSE 0 END), 0) AS total_income,
-                COALESCE(SUM(CASE WHEN type = 'expense' AND is_void = false AND date BETWEEN @From AND @To THEN amount ELSE 0 END), 0) AS total_expenses
-            FROM transactions
-            WHERE user_id = @UserId
-              AND status IN ('posted', 'reconciled')
-            """,
-            new
-            {
-                UserId = _currentUser.UserId,
-                From = rangeFrom.ToDateTime(TimeOnly.MinValue),
-                To = rangeTo.ToDateTime(TimeOnly.MinValue)
-            },
-            cancellationToken: cancellationToken);
+        var transactions = await _db.QuerySelect<FinancialTransaction>()
+            .From<FinancialTransaction>()
+            .SelectAllFrom<FinancialTransaction>()
+            .Where(transaction => transaction.UserId == _currentUser.UserId)
+            .ToListAsync();
+        var scopedTransactions = transactions
+            .Where(transaction => !filterAccounts || selectedAccountIds.Contains(transaction.AccountId))
+            .ToList();
 
-        var liquidBalance = await _db.QuerySingleAsync<decimal>(
-            $"""
-            SELECT {AccountSql.BalanceExpression}
-            FROM accounts a
-            LEFT JOIN transactions t ON t.account_id = a.id AND t.user_id = a.user_id
-            WHERE a.user_id = @UserId
-              AND a.include_in_dashboard = true
-              AND a.status = 'active'
-              AND a.type IN ('checking', 'savings', 'cash')
-            """,
-            new { UserId = _currentUser.UserId },
-            cancellationToken: cancellationToken);
+        var reportingTransactions = scopedTransactions
+            .Where(transaction => transaction.Status is "posted" or "reconciled")
+            .Where(transaction => !transaction.IsVoid)
+            .Where(transaction => transaction.Date >= rangeFrom && transaction.Date <= rangeTo)
+            .ToList();
 
-        var recent = await _db.QueryAsync<TransactionListItemDto>(
-            TransactionSql.SelectList +
-            """
-            WHERE t.user_id = @UserId
-              AND t.is_void = false
-            ORDER BY t.date DESC, t.created_at DESC
-            LIMIT 10
-            """,
-            new { UserId = _currentUser.UserId },
-            cancellationToken: cancellationToken);
+        var totalIncome = reportingTransactions
+            .Where(transaction => transaction.Type == "income")
+            .Sum(transaction => transaction.Amount);
+        var totalExpenses = reportingTransactions
+            .Where(transaction => transaction.Type == "expense")
+            .Sum(transaction => transaction.Amount);
+
+        var activeAccounts = await _db.QuerySelect<FinanceTracker.Api.Features.Accounts.Account>()
+            .From<FinanceTracker.Api.Features.Accounts.Account>()
+            .SelectAllFrom<FinanceTracker.Api.Features.Accounts.Account>()
+            .Where(account => account.UserId == _currentUser.UserId && account.Status == "active")
+            .ToListAsync();
+        var activeAccountIds = activeAccounts
+            .Where(account => !filterAccounts || selectedAccountIds.Contains(account.Id))
+            .Select(account => account.Id)
+            .ToHashSet();
+        var liquidBalance = scopedTransactions
+            .Where(transaction => activeAccountIds.Contains(transaction.AccountId))
+            .Where(AccountService.CountsTowardBalance)
+            .Sum(AccountService.SignedBalanceAmount);
+
+        var recent = scopedTransactions
+            .Where(transaction => transaction.IsVoid == false)
+            .OrderByDescending(transaction => transaction.Date)
+            .ThenByDescending(transaction => transaction.CreatedAt)
+            .Take(10)
+            .MapToList<FinancialTransaction, TransactionListItemDto>();
 
         return new DashboardSummaryDto(
             rangeFrom,
             rangeTo,
-            totals.TotalIncome,
-            totals.TotalExpenses,
-            totals.TotalIncome - totals.TotalExpenses,
+            totalIncome,
+            totalExpenses,
+            totalIncome - totalExpenses,
             liquidBalance,
             recent,
             0);
-    }
-
-    private sealed class DashboardTotals
-    {
-        public decimal TotalIncome { get; set; }
-        public decimal TotalExpenses { get; set; }
     }
 }

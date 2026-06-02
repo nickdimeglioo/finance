@@ -5,6 +5,7 @@ using System.Data;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Dapper;
 
@@ -33,7 +34,8 @@ public static partial class OrmMapper
     public static async Task<T> SaveAsync<T>(T entity, SaveQuery? saveQuery = null, bool useTransaction = true, 
                                              string auditUserId = "System",
                                              IDbConnection? conn = null, IDbTransaction? trans = null,
-                                             IReadOnlyList<IDbInterceptor>? interceptors = null) where T : class
+                                             IReadOnlyList<IDbInterceptor>? interceptors = null,
+                                             CancellationToken cancellationToken = default) where T : class
     {
         if (entity == null) return default;
 
@@ -44,7 +46,8 @@ public static partial class OrmMapper
             CurrentConnection = conn,
             Transaction = trans,
             AuditUserId = auditUserId,
-            Interceptors = interceptors
+            Interceptors = interceptors,
+            CancellationToken = cancellationToken
         };
 
         var result = await SaveBulkAsync(new[] { entity }, options);
@@ -125,16 +128,16 @@ public static partial class OrmMapper
                 var updateContext = CreateUpdateContext(connection, entities.Where(entity => !IsDefaultValue(metadata.PrimaryKey.Property.GetValue(entity))).Cast<object>().ToList(), metadata, options);
 
                 if (insertContext.Entities.Count > 0)
-                    await RunBeforeInsertInterceptorsAsync(insertContext, options.Interceptors);
+                    await RunBeforeInsertInterceptorsAsync(insertContext, options.Interceptors, options.CancellationToken);
                 if (updateContext.Entities.Count > 0)
-                    await RunBeforeUpdateInterceptorsAsync(updateContext, options.Interceptors);
+                    await RunBeforeUpdateInterceptorsAsync(updateContext, options.Interceptors, options.CancellationToken);
 
                 await BulkDialect.BulkMergeAsync(connection, options.Transaction, entities, metadata, options);
 
                 if (insertContext.Entities.Count > 0)
-                    await RunAfterInsertInterceptorsAsync(insertContext, options.Interceptors);
+                    await RunAfterInsertInterceptorsAsync(insertContext, options.Interceptors, options.CancellationToken);
                 if (updateContext.Entities.Count > 0)
-                    await RunAfterUpdateInterceptorsAsync(updateContext, options.Interceptors);
+                    await RunAfterUpdateInterceptorsAsync(updateContext, options.Interceptors, options.CancellationToken);
             }
             else
             {
@@ -152,9 +155,18 @@ public static partial class OrmMapper
         {
             var pkValue = metadata.PrimaryKey.Property.GetValue(entity);
             if (IsDefaultValue(pkValue))
+            {
+                if (metadata.PrimaryKey.Property.PropertyType == typeof(Guid))
+                {
+                    metadata.PrimaryKey.Property.SetValue(entity, Guid.NewGuid());
+                }
+
                 inserts.Add(entity);
+            }
             else
+            {
                 upserts.Add(entity);
+            }
         }
 
         var props = metadata.SavableProperties.Where(p => !p.IsPrimaryKey).ToList();
@@ -168,9 +180,9 @@ public static partial class OrmMapper
             {
                 var batch = inserts.Skip(i).Take(batchSize).ToList();
                 var context = CreateInsertContext(connection, batch.Cast<object>().ToList(), metadata, options);
-                await RunBeforeInsertInterceptorsAsync(context, options.Interceptors);
-                await ExecuteBatchAsync(connection, batch, metadata, props, options.Transaction, isUpsert: false);
-                await RunAfterInsertInterceptorsAsync(context, options.Interceptors);
+                await RunBeforeInsertInterceptorsAsync(context, options.Interceptors, options.CancellationToken);
+                await ExecuteBatchAsync(connection, batch, metadata, props, options.Transaction, isUpsert: false, options.CancellationToken);
+                await RunAfterInsertInterceptorsAsync(context, options.Interceptors, options.CancellationToken);
             }
         }
 
@@ -181,9 +193,9 @@ public static partial class OrmMapper
             {
                 var batch = upserts.Skip(i).Take(batchSize).ToList();
                 var context = CreateUpdateContext(connection, batch.Cast<object>().ToList(), metadata, options);
-                await RunBeforeUpdateInterceptorsAsync(context, options.Interceptors);
-                await ExecuteBatchAsync(connection, batch, metadata, props, options.Transaction, isUpsert: true);
-                await RunAfterUpdateInterceptorsAsync(context, options.Interceptors);
+                await RunBeforeUpdateInterceptorsAsync(context, options.Interceptors, options.CancellationToken);
+                await ExecuteBatchAsync(connection, batch, metadata, props, options.Transaction, isUpsert: true, options.CancellationToken);
+                await RunAfterUpdateInterceptorsAsync(context, options.Interceptors, options.CancellationToken);
             }
         }
     }
@@ -198,16 +210,17 @@ public static partial class OrmMapper
         return new UpdateContext(connection, options.Transaction, metadata, entities);
     }
 
-    private static async Task ExecuteBatchAsync<T>(IDbConnection connection, List<T> batch, ClassMetadata metadata, List<PropertyMetadata> savableProps, IDbTransaction transaction, bool isUpsert) where T : class
+    private static async Task ExecuteBatchAsync<T>(IDbConnection connection, List<T> batch, ClassMetadata metadata, List<PropertyMetadata> savableProps, IDbTransaction transaction, bool isUpsert, CancellationToken cancellationToken) where T : class
     {
         if (!batch.Any()) return;
 
         var sb = new StringBuilder();
         var parameters = new DynamicParameters();
         var columnNames = new List<string>();
+        var includePrimaryKeyForInsert = !isUpsert && batch.Any(entity => !IsDefaultValue(metadata.PrimaryKey.Property.GetValue(entity)));
 
         // 1. Setup Columns
-        if (isUpsert) columnNames.Add($"\"{metadata.PrimaryKey.ColumnName}\"");
+        if (isUpsert || includePrimaryKeyForInsert) columnNames.Add($"\"{metadata.PrimaryKey.ColumnName}\"");
 
         foreach (var prop in savableProps)
         {
@@ -223,8 +236,8 @@ public static partial class OrmMapper
             var entity = batch[i];
             var rowParams = new List<string>();
 
-            // Handle PK for Upsert
-            if (isUpsert)
+            // Handle PK for Upsert or caller/client generated insert IDs.
+            if (isUpsert || includePrimaryKeyForInsert)
             {
                 var pkVal = metadata.PrimaryKey.Property.GetValue(entity);
                 var pkParam = $"@pk_{i}";
@@ -293,7 +306,7 @@ public static partial class OrmMapper
         {
             // We assume the DB returns IDs in the same order as VALUES
             // This is guaranteed in Postgres for INSERT ... RETURNING
-            var ids = await connection.QueryAsync<object>(sb.ToString(), parameters, transaction);
+            var ids = await connection.QueryAsync<object>(new CommandDefinition(sb.ToString(), parameters, transaction, cancellationToken: cancellationToken));
             var idList = ids.ToList();
 
             for (int i = 0; i < batch.Count && i < idList.Count; i++)
@@ -308,7 +321,7 @@ public static partial class OrmMapper
         }
         else
         {
-            await connection.ExecuteAsync(sb.ToString(), parameters, transaction);
+            await connection.ExecuteAsync(new CommandDefinition(sb.ToString(), parameters, transaction, cancellationToken: cancellationToken));
         }
     }
 
@@ -359,7 +372,8 @@ public static partial class OrmMapper
                 CurrentConnection = connection,
                 SaveQuery = fkSaveQuery,
                 Interceptors = options.Interceptors,
-                AuditUserId = options.AuditUserId
+                AuditUserId = options.AuditUserId,
+                CancellationToken = options.CancellationToken
             };
 
             // 3. Dynamically call SaveBulkInternalAsync<FKType>

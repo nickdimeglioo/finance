@@ -2,7 +2,8 @@ using System.Globalization;
 using FinanceTracker.Api.Features.Rules;
 using FinanceTracker.Api.Features.Shared;
 using FinanceTracker.Api.Features.Transactions;
-using FinanceTracker.Data.Contracts;
+using PipelineRunner.Services;
+using PipelineRunner.Utils;
 
 namespace FinanceTracker.Api.Services;
 
@@ -12,9 +13,9 @@ public sealed class ClassificationRuleService
     private static readonly string[] FieldTargets = ["description", "merchant", "category", "amount"];
 
     private readonly ICurrentUserContext _currentUser;
-    private readonly IFinanceDataSession _db;
+    private readonly IOrmMapperService _db;
 
-    public ClassificationRuleService(ICurrentUserContext currentUser, IFinanceDataSession db)
+    public ClassificationRuleService(ICurrentUserContext currentUser, IOrmMapperService db)
     {
         _currentUser = currentUser;
         _db = db;
@@ -46,7 +47,7 @@ public sealed class ClassificationRuleService
             UpdatedAt = now
         };
 
-        await _db.SaveAsync(rule, _currentUser.UserId.ToString(), cancellationToken: cancellationToken);
+        await _db.SaveAsync(rule, auditUserId: _currentUser.UserId.ToString());
         return ToDto(rule);
     }
 
@@ -69,7 +70,7 @@ public sealed class ClassificationRuleService
         rule.IsActive = request.IsActive;
         rule.UpdatedAt = DateTimeOffset.UtcNow;
 
-        await _db.SaveAsync(rule, _currentUser.UserId.ToString(), cancellationToken: cancellationToken);
+        await _db.SaveAsync(rule, auditUserId: _currentUser.UserId.ToString());
         return ToDto(rule);
     }
 
@@ -81,18 +82,21 @@ public sealed class ClassificationRuleService
             return false;
         }
 
-        await _db.ExecuteAsync("DELETE FROM classification_rules WHERE id = @Id AND user_id = @UserId", new { Id = id, UserId = _currentUser.UserId }, cancellationToken: cancellationToken);
+        await _db.DeleteAsync(rule, userId: _currentUser.UserId.ToString());
         return true;
     }
 
     public async Task ReorderAsync(ReorderRulesRequest request, CancellationToken cancellationToken)
     {
-        await _db.ExecuteInTransactionAsync(async (connection, transaction) =>
+        await using var transaction = _db.BeginMultiTransaction();
+        transaction.Open();
+
+        try
         {
             var priority = 10;
             foreach (var id in request.RuleIds)
             {
-                var rule = await GetOwnedAsync(id, connection, transaction, cancellationToken);
+                var rule = await GetOwnedAsync(id, transaction, cancellationToken);
                 if (rule is null)
                 {
                     throw new ArgumentException("One or more classification rules were not found.");
@@ -100,10 +104,17 @@ public sealed class ClassificationRuleService
 
                 rule.Priority = priority;
                 rule.UpdatedAt = DateTimeOffset.UtcNow;
-                await _db.SaveAsync(rule, _currentUser.UserId.ToString(), connection, transaction, cancellationToken);
+                await transaction.Save(rule);
                 priority += 10;
             }
-        }, cancellationToken);
+
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     public async Task<TestClassificationRuleResult> TestAsync(TestClassificationRuleRequest request, CancellationToken cancellationToken)
@@ -140,7 +151,11 @@ public sealed class ClassificationRuleService
 
     internal async Task<IReadOnlyList<ClassificationRule>> LoadRulesAsync(bool includeInactive, CancellationToken cancellationToken)
     {
-        var rules = await _db.WhereAsync<ClassificationRule>(rule => rule.UserId == _currentUser.UserId, cancellationToken: cancellationToken);
+        var rules = await _db.QuerySelect<ClassificationRule>()
+            .From<ClassificationRule>()
+            .SelectAllFrom<ClassificationRule>()
+            .Where(rule => rule.UserId == _currentUser.UserId)
+            .ToListAsync();
         return rules
             .Where(rule => includeInactive || rule.IsActive)
             .OrderBy(rule => rule.Priority)
@@ -170,11 +185,12 @@ public sealed class ClassificationRuleService
 
     private async Task<ClassificationRule?> GetOwnedAsync(
         Guid id,
-        System.Data.IDbConnection? connection = null,
-        System.Data.IDbTransaction? transaction = null,
+        MultiTransaction? transaction = null,
         CancellationToken cancellationToken = default)
     {
-        var rule = await _db.GetByIdAsync<ClassificationRule>(id, connection, transaction, cancellationToken);
+        var rule = transaction is null
+            ? await _db.GetByIdAsync<ClassificationRule>(id, depth: 0)
+            : await transaction.GetByIdAsync<ClassificationRule>(id);
         return rule?.UserId == _currentUser.UserId ? rule : null;
     }
 

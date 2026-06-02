@@ -24,7 +24,27 @@ public class TableNameAttribute : Attribute
 public enum DbNamingConvention
 {
     SnakeCase,
-    PascalCase
+    PascalCase,
+    CamelCase
+}
+
+public sealed class OrmMapperOptions
+{
+    public DbNamingConvention TableStyle { get; set; } = DbNamingConvention.SnakeCase;
+    public DbNamingConvention ColumnStyle { get; set; } = DbNamingConvention.SnakeCase;
+    public bool PluralizeTableNames { get; set; } = true;
+    public IsolationLevel DefaultTransactionIsolationLevel { get; set; } = IsolationLevel.ReadCommitted;
+
+    public OrmMapperOptions Clone()
+    {
+        return new OrmMapperOptions
+        {
+            TableStyle = TableStyle,
+            ColumnStyle = ColumnStyle,
+            PluralizeTableNames = PluralizeTableNames,
+            DefaultTransactionIsolationLevel = DefaultTransactionIsolationLevel
+        };
+    }
 }
 
 [AttributeUsage(AttributeTargets.Class)]
@@ -228,6 +248,7 @@ public class SelectQuery()
     // When true, query execution opens/disposes CurrentConnection automatically.
     public bool ManageConnectionLifecycle { get; set; } = false;
     public IReadOnlyList<IDbInterceptor>? Interceptors { get; set; }
+    public CancellationToken CancellationToken { get; set; } = default;
 }
 
 
@@ -284,6 +305,7 @@ public class ClassMetadata
     public Type Type { get; set; }
     public string TableName { get; set; }
     public DbNamingConvention NamingConvention { get; set; } = DbNamingConvention.SnakeCase;
+    public DbNamingConvention TableNamingConvention { get; set; } = DbNamingConvention.SnakeCase;
     public string? SoftDeleteField { get; set; }
     public bool SupportsSoftDelete { get; set; }
     public PropertyMetadata? SoftDeleteProperty { get; set; }
@@ -350,8 +372,46 @@ public static partial class OrmMapper
 {
     private static readonly ConcurrentDictionary<Type, ClassMetadata> _metadataCache = new();
     private static readonly ConcurrentDictionary<PropertyInfo, DelegateType> _delegateCache = new();
+    private static readonly object OptionsLock = new();
+    private static OrmMapperOptions _options = new();
     public static ClassMetadata GetMetadata<T>() => GetOrCreateMetadata(typeof(T));
     public static ClassMetadata GetMetadata(Type type) => GetOrCreateMetadata(type);
+
+    public static OrmMapperOptions Options
+    {
+        get
+        {
+            lock (OptionsLock)
+            {
+                return _options.Clone();
+            }
+        }
+    }
+
+    public static void Configure(OrmMapperOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        lock (OptionsLock)
+        {
+            _options = options.Clone();
+            _metadataCache.Clear();
+        }
+    }
+
+    public static void Configure(Action<OrmMapperOptions> configure)
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+
+        var options = Options;
+        configure(options);
+        Configure(options);
+    }
+
+    internal static OrmMapperOptions GetOptionsSnapshot()
+    {
+        return Options;
+    }
     public static DelegateType GetDelegate(PropertyInfo prop)
     {
         return _delegateCache.GetOrAdd(prop, p =>
@@ -375,15 +435,18 @@ public static partial class OrmMapper
         return _metadataCache.GetOrAdd(type, t =>
         {
             var metadata = new ClassMetadata { Type = t };
+            var options = GetOptionsSnapshot();
 
 
-            var namingConvention = t.GetCustomAttribute<DbNamingConventionAttribute>(inherit: false)?.Convention
-                ?? DbNamingConvention.SnakeCase;
-            metadata.NamingConvention = namingConvention;
+            var classNamingConvention = t.GetCustomAttribute<DbNamingConventionAttribute>(inherit: false)?.Convention;
+            var tableNamingConvention = classNamingConvention ?? options.TableStyle;
+            var columnNamingConvention = classNamingConvention ?? options.ColumnStyle;
+            metadata.NamingConvention = columnNamingConvention;
+            metadata.TableNamingConvention = tableNamingConvention;
 
             // Get table name
             var tableAttr = t.GetCustomAttribute<TableNameAttribute>(inherit: false);
-            metadata.TableName = tableAttr?.Name ?? GetDefaultTableName(t, namingConvention);
+            metadata.TableName = tableAttr?.Name ?? GetDefaultTableName(t, tableNamingConvention, options.PluralizeTableNames);
             var softDeleteAttr = t.GetCustomAttribute<SoftDeleteAttribute>();
             //FieldType? tableField = t.GetCustomAttribute<DBTypeAttribute>(inherit: false)?.ColumnType; // Is this right, idk
             metadata.SoftDeleteField = softDeleteAttr?.ColumnName;
@@ -418,7 +481,7 @@ public static partial class OrmMapper
                 var propMetadata = new PropertyMetadata
                 {
                     Property = prop,
-                    ColumnName = prop.GetCustomAttribute<ColumnAttribute>()?.Name ?? GetDefaultColumnName(prop.Name, namingConvention),
+                    ColumnName = prop.GetCustomAttribute<ColumnAttribute>()?.Name ?? GetDefaultColumnName(prop.Name, columnNamingConvention),
                     IsPrimaryKey = prop.GetCustomAttribute<PrimaryKeyAttribute>() != null || isCustomPrimaryKey,
                     IsLoadable = hasDb && prop.GetCustomAttribute<NotLoadableAttribute>() == null,
                     IsSavable = hasDb && prop.GetCustomAttribute<NotSavableAttribute>() == null,
@@ -448,7 +511,7 @@ public static partial class OrmMapper
                 if (hasDb && (fkAttr != null || (!IsSimpleType(prop.PropertyType) && !IsCollection(prop.PropertyType) && propMetadata.CustomField == null)))
                 { // if we use a class and specify a custom field type (like jsonb) it will only allow for FK if FK attrb is used (not that this should ever happen tbh)
                     propMetadata.IsForeignKey = true;
-                    propMetadata.ForeignKeyColumn = fkAttr?.ColumnName ?? GetDefaultForeignKeyColumnName(prop.Name, namingConvention);
+                    propMetadata.ForeignKeyColumn = fkAttr?.ColumnName ?? GetDefaultForeignKeyColumnName(prop.Name, columnNamingConvention);
                     propMetadata.ForeignKeyType = prop.PropertyType;
                 }
 
@@ -495,7 +558,7 @@ public static partial class OrmMapper
 
             if (metadata.SupportsSoftDelete)
             {
-                metadata.SoftDeleteField ??= metadata.SoftDeleteProperty?.ColumnName ?? "is_deleted";
+                metadata.SoftDeleteField ??= metadata.SoftDeleteProperty?.ColumnName ?? ApplyNamingConvention(nameof(ISoftDelete.IsDeleted), columnNamingConvention);
             }
 
             // Handle inheritance
@@ -625,8 +688,7 @@ public static partial class OrmMapper
     public static bool IsSimpleType(Type type)
     {
         return type.IsPrimitive || type.IsEnum || type == typeof(string) || type.IsArray ||
-               type == typeof(DateTime) || type == typeof(DateOnly) || type == typeof(TimeOnly) ||
-               type == typeof(decimal) || type == typeof(DateTimeOffset) || type == typeof(Guid) ||
+               type == typeof(DateTime) || type == typeof(decimal) || type == typeof(DateTimeOffset) || type == typeof(DateOnly) || type == typeof(Guid) ||
                (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>) &&
                 IsSimpleType(type.GetGenericArguments()[0]));
     }
@@ -648,58 +710,76 @@ public static partial class OrmMapper
         return type != typeof(string) && typeof(IEnumerable).IsAssignableFrom(type);
     }
 
-    public static string ToPascalCase(string snake_case)
+    public static string ToPascalCase(string value)
     {
-        if (string.IsNullOrWhiteSpace(snake_case))
+        if (string.IsNullOrWhiteSpace(value))
             return string.Empty;
 
-        string[] parts = snake_case.Split('_');
+        if (!value.Contains('_'))
+        {
+            return char.ToUpperInvariant(value[0]) + value[1..];
+        }
+
+        string[] parts = value.Split('_', StringSplitOptions.RemoveEmptyEntries);
         TextInfo textInfo = CultureInfo.InvariantCulture.TextInfo;
         for (int i = 0; i < parts.Length; i++)
         {
-            parts[i] = textInfo.ToTitleCase(parts[i].ToLower());
+            parts[i] = textInfo.ToTitleCase(parts[i].ToLowerInvariant());
         }
+
         return string.Concat(parts);
     }
 
-    public static string ToSnakeCase(string PascalCase)
+    public static string ToSnakeCase(string value)
     {
-        if (string.IsNullOrEmpty(PascalCase)) return PascalCase;
+        if (string.IsNullOrEmpty(value)) return value;
 
         var result = new StringBuilder();
-        result.Append(char.ToLower(PascalCase[0]));
+        result.Append(char.ToLowerInvariant(value[0]));
 
-        for (int i = 1; i < PascalCase.Length; i++)
+        for (int i = 1; i < value.Length; i++)
         {
-            if (char.IsUpper(PascalCase[i]))
+            if (char.IsUpper(value[i]))
             {
                 result.Append('_');
-                result.Append(char.ToLower(PascalCase[i]));
+                result.Append(char.ToLowerInvariant(value[i]));
             }
             else
             {
-                result.Append(PascalCase[i]);
+                result.Append(value[i]);
             }
         }
         return result.ToString();
     }
 
-    private static string GetDefaultTableName(Type type, DbNamingConvention namingConvention)
+    public static string ToCamelCase(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var pascal = ToPascalCase(value);
+        return char.ToLowerInvariant(pascal[0]) + pascal[1..];
+    }
+
+    public static string ApplyNamingConvention(string value, DbNamingConvention namingConvention)
     {
         return namingConvention switch
         {
-            DbNamingConvention.PascalCase => $"{type.Name}s",
-            _ => ToSnakeCase($"{type.Name}s")
+            DbNamingConvention.PascalCase => ToPascalCase(value),
+            DbNamingConvention.CamelCase => ToCamelCase(value),
+            _ => ToSnakeCase(value)
         };
+    }
+
+    private static string GetDefaultTableName(Type type, DbNamingConvention namingConvention, bool pluralize)
+    {
+        var tableName = pluralize ? $"{type.Name}s" : type.Name;
+        return ApplyNamingConvention(tableName, namingConvention);
     }
 
     public static string GetDefaultColumnName(string propertyName, DbNamingConvention namingConvention)
     {
-        return namingConvention switch
-        {
-            DbNamingConvention.PascalCase => propertyName,
-            _ => ToSnakeCase(propertyName)
-        };
+        return ApplyNamingConvention(propertyName, namingConvention);
     }
 
     public static string GetDefaultColumnName(ClassMetadata metadata, string propertyName)
@@ -712,6 +792,7 @@ public static partial class OrmMapper
         return namingConvention switch
         {
             DbNamingConvention.PascalCase => $"{propertyName}Id",
+            DbNamingConvention.CamelCase => $"{ToCamelCase(propertyName)}Id",
             _ => $"{ToSnakeCase(propertyName)}_id"
         };
     }
@@ -927,12 +1008,13 @@ public static partial class OrmMapper
             Sql = sql,
             Parameters = parameters
         };
-        await RunBeforeSelectInterceptorsAsync(context, selectQuery?.Interceptors);
+        var cancellationToken = selectQuery?.CancellationToken ?? default;
+        await RunBeforeSelectInterceptorsAsync(context, selectQuery?.Interceptors, cancellationToken);
 
         // Execute with multi-mapping for all joined tables
-        var results = (await ExecuteMultiMappingQuery<T>(connection, sql, parameters, splitMapping, metadata, selectQuery?.CurrentTransaction)).ToList();
+        var results = (await ExecuteMultiMappingQuery<T>(connection, sql, parameters, splitMapping, metadata, selectQuery?.CurrentTransaction, cancellationToken)).ToList();
         context.Result = results;
-        await RunAfterSelectInterceptorsAsync(context, selectQuery?.Interceptors);
+        await RunAfterSelectInterceptorsAsync(context, selectQuery?.Interceptors, cancellationToken);
 
         return results;
     }
@@ -971,10 +1053,11 @@ public static partial class OrmMapper
             Sql = sql,
             Parameters = parameters
         };
-        await RunBeforeSelectInterceptorsAsync(context, selectQuery?.Interceptors);
-        var results = (await connection.QueryAsync<T>(sql, parameters, selectQuery?.CurrentTransaction)).ToList();
+        var cancellationToken = selectQuery?.CancellationToken ?? default;
+        await RunBeforeSelectInterceptorsAsync(context, selectQuery?.Interceptors, cancellationToken);
+        var results = (await connection.QueryAsync<T>(new CommandDefinition(sql, parameters, selectQuery?.CurrentTransaction, cancellationToken: cancellationToken))).ToList();
         context.Result = results;
-        await RunAfterSelectInterceptorsAsync(context, selectQuery?.Interceptors);
+        await RunAfterSelectInterceptorsAsync(context, selectQuery?.Interceptors, cancellationToken);
         return results;
     }
 
@@ -1225,14 +1308,14 @@ BuildOptimizedSelectWithJoins(ClassMetadata metadata, int depth, HashSet<Type> i
     }
 
     // NEW: Execute multi-mapping query efficiently
-    public static async Task<IEnumerable<T>> ExecuteMultiMappingQuery<T>(IDbConnection connection, string sql, object parameters, List<SplitMapping> splitMappings, ClassMetadata metadata, IDbTransaction? transaction = null) where T : class, new()
+    public static async Task<IEnumerable<T>> ExecuteMultiMappingQuery<T>(IDbConnection connection, string sql, object parameters, List<SplitMapping> splitMappings, ClassMetadata metadata, IDbTransaction? transaction = null, CancellationToken cancellationToken = default) where T : class, new()
     {
         //if (!splitMappings.Any()) return await connection.QueryAsync<T>(sql, parameters);
 
         var splitOn = string.Join(",", splitMappings.Select(s => s.SplitOn.Trim('\"')));
 
         // Map using Dapper generics (up to 7 types)
-        return await MapWithManyFks<T>(connection, sql, parameters, splitOn, splitMappings, transaction); // Fallback for many splits
+        return await MapWithManyFks<T>(connection, sql, parameters, splitOn, splitMappings, transaction, cancellationToken); // Fallback for many splits
         //return splitMappings.Count switch
         //{
         //    1 => await connection.QueryAsync<T, dynamic, T>(sql, (e, d1) => { PopulateSplitData(e, d1, splitMappings[0]); return e; }, parameters, splitOn: splitOn),
@@ -1321,10 +1404,11 @@ BuildOptimizedSelectWithJoins(ClassMetadata metadata, int depth, HashSet<Type> i
     object parameters,
     string splitOn,
     List<SplitMapping> mappings,
-    IDbTransaction? transaction = null
+    IDbTransaction? transaction = null,
+    CancellationToken cancellationToken = default
 ) where T : class, new()
     {
-        var results = await connection.QueryAsync(sql, parameters, transaction);
+        var results = await connection.QueryAsync(new CommandDefinition(sql, parameters, transaction, cancellationToken: cancellationToken));
         var entities = new List<T>();
 
         var metadata = GetOrCreateMetadata(typeof(T));

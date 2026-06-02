@@ -1,10 +1,10 @@
+using Dapper;
 using FinanceTracker.Api.Authentication;
 using FinanceTracker.Api.Configuration;
 using FinanceTracker.Api.Infrastructure.Data;
 using FinanceTracker.Api.Infrastructure.Data.SqlMapper;
 using FinanceTracker.Api.Infrastructure.Storage;
 using FinanceTracker.Api.Services;
-using FinanceTracker.Data.Contracts;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
 
@@ -25,7 +25,6 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<NpgsqlConnectionFactory>();
 builder.Services.AddFinanceOrmMapper(databaseOptions.ConnectionString);
-builder.Services.AddScoped<IFinanceDataSession, FinanceSqlMapperDataSession>();
 builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
 builder.Services.AddScoped<IObjectStorageService, S3CompatibleObjectStorageService>();
 builder.Services.AddScoped<HealthDiagnosticService>();
@@ -35,9 +34,19 @@ builder.Services.AddScoped<TransferService>();
 builder.Services.AddScoped<ImportService>();
 builder.Services.AddScoped<ImportRuleService>();
 builder.Services.AddScoped<ClassificationRuleService>();
+builder.Services.AddScoped<StorageFileService>();
 builder.Services.AddScoped<ReportService>();
 builder.Services.AddScoped<GuidanceService>();
 builder.Services.AddScoped<DashboardService>();
+
+OrmConfiguration.AddType<Enum>(new EnumHandler());
+OrmConfiguration.AddType<Dictionary<string, object>>(new DBSerializer());
+OrmConfiguration.AddType<Dictionary<string, string>>(new DBSerializer());
+OrmConfiguration.AddType<DateTimeOffset>(new DateTimeOffsetHandler());
+OrmConfiguration.AddType<DateTimeOffset?>(new DateTimeOffsetHandler());
+OrmConfiguration.AddType<DateOnly>(new DateOnlyHandler());
+OrmConfiguration.AddType<DateOnly?>(new DateOnlyHandler());
+SqlMapper.AddTypeHandler(new DateOnlyDapperTypeHandler());
 
 builder.Services
     .AddAuthentication(DevelopmentAuthHandler.SchemeName)

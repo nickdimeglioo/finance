@@ -21,7 +21,6 @@ export interface AccountListItemDto {
   currency: string;
   currentBalance: number;
   status: AccountStatus;
-  includeInDashboard: boolean;
 }
 
 export interface AccountDetailDto extends AccountListItemDto {
@@ -42,7 +41,6 @@ export interface CreateAccountRequest {
   creditLimit?: number | null;
   interestRate?: number | null;
   notes?: string | null;
-  includeInDashboard: boolean;
 }
 
 export interface UpdateAccountRequest extends CreateAccountRequest {
@@ -212,6 +210,7 @@ export interface ImportColumnMap {
 
 export interface PreviewImportRequest {
   columnMap: ImportColumnMap;
+  ruleSetId?: string | null;
   dateFormat?: string | null;
   amountFormat?: string | null;
   saveTemplate: boolean;
@@ -254,8 +253,12 @@ export interface ImportCommitResult {
 
 export interface ImportRuleDto {
   id: string;
+  ruleSetId?: string | null;
   name: string;
-  pattern: string;
+  pattern?: string | null;
+  sourceField?: string | null;
+  targetField?: string | null;
+  valueTransform: string;
   mapsToType?: string | null;
   mapsToCategory?: string | null;
   mapsToClassification?: string | null;
@@ -267,8 +270,12 @@ export interface ImportRuleDto {
 }
 
 export interface UpsertImportRuleRequest {
+  ruleSetId?: string | null;
   name: string;
-  pattern: string;
+  pattern?: string | null;
+  sourceField?: string | null;
+  targetField?: string | null;
+  valueTransform?: string | null;
   mapsToType?: string | null;
   mapsToCategory?: string | null;
   mapsToClassification?: string | null;
@@ -284,6 +291,15 @@ export interface TestImportRuleResult {
   category?: string | null;
   classification: TransactionClassification;
   matchedRules: ImportRuleDto[];
+}
+
+export interface ImportRuleSetDto {
+  id: string;
+  name: string;
+  institution?: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ClassificationRuleDto {
@@ -315,4 +331,16 @@ export interface TestClassificationRuleResult {
   classification: TransactionClassification;
   category?: string | null;
   matchedRule?: ClassificationRuleDto | null;
+}
+
+export interface StorageFileDto {
+  id: string;
+  originalFileName: string;
+  storedFileName: string;
+  contentType: string;
+  s3ObjectKey: string;
+  sizeBytes: number;
+  purpose: string;
+  createdAt: string;
+  updatedAt: string;
 }

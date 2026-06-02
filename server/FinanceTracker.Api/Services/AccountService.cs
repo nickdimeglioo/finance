@@ -1,47 +1,66 @@
 using FinanceTracker.Api.Features.Accounts;
 using FinanceTracker.Api.Features.Shared;
 using FinanceTracker.Api.Features.Transactions;
-using FinanceTracker.Data.Contracts;
+using FinanceTracker.Api.Mapping;
+using PipelineRunner.Services;
+using PipelineRunner.Utils;
 
 namespace FinanceTracker.Api.Services;
 
 public sealed class AccountService
 {
     private readonly ICurrentUserContext _currentUser;
-    private readonly IFinanceDataSession _db;
+    private readonly IOrmMapperService _db;
 
-    public AccountService(ICurrentUserContext currentUser, IFinanceDataSession db)
+    public AccountService(ICurrentUserContext currentUser, IOrmMapperService db)
     {
         _currentUser = currentUser;
         _db = db;
     }
 
-    public Task<IReadOnlyList<AccountListItemDto>> ListAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<AccountListItemDto>> ListAsync(CancellationToken cancellationToken)
     {
-        return _db.QueryAsync<AccountListItemDto>(
-            AccountSql.SelectAccountList + " ORDER BY a.status, a.nickname",
-            new { UserId = _currentUser.UserId },
-            cancellationToken: cancellationToken);
+        var accounts = await _db.QuerySelect<Account>()
+            .From<Account>()
+            .SelectAllFrom<Account>()
+            .Where(account => account.UserId == _currentUser.UserId)
+            .ToListAsync();
+        var balances = await LoadBalancesAsync(cancellationToken: cancellationToken);
+        return accounts
+            .OrderBy(account => account.Status)
+            .ThenBy(account => account.Nickname)
+            .Select(account =>
+            {
+                var dto = account.MapTo<Account, AccountListItemDto>();
+                dto.CurrentBalance = balances.GetValueOrDefault(account.Id);
+                return dto;
+            })
+            .ToList();
     }
 
-    public Task<AccountDetailDto?> GetAsync(Guid accountId, CancellationToken cancellationToken)
+    public async Task<AccountDetailDto?> GetAsync(Guid accountId, CancellationToken cancellationToken)
     {
-        return _db.QuerySingleOrDefaultAsync<AccountDetailDto>(
-            AccountSql.SelectAccountDetail + " WHERE a.user_id = @UserId AND a.id = @AccountId GROUP BY a.id",
-            new { UserId = _currentUser.UserId, AccountId = accountId },
-            cancellationToken: cancellationToken);
+        var account = await GetOwnedAccountAsync(accountId, cancellationToken: cancellationToken);
+        if (account is null)
+        {
+            return null;
+        }
+
+        return await ToDetailDtoAsync(account, cancellationToken: cancellationToken);
     }
 
-    public Task<AccountDetailDto> CreateAsync(CreateAccountRequest request, CancellationToken cancellationToken)
+    public async Task<AccountDetailDto> CreateAsync(CreateAccountRequest request, CancellationToken cancellationToken)
     {
         ValidateAccount(request.Nickname, request.Type, request.Currency, request.OpeningBalance, request.CreditLimit, request.InterestRate);
 
-        return _db.ExecuteInTransactionAsync(async (connection, transaction) =>
+        await using var transaction = _db.BeginMultiTransaction();
+        transaction.Open();
+
+        try
         {
             var now = DateTimeOffset.UtcNow;
             var account = new Account
             {
-                Id = Guid.NewGuid(),
                 UserId = _currentUser.UserId,
                 Institution = request.Institution,
                 Nickname = request.Nickname.Trim(),
@@ -57,13 +76,12 @@ public sealed class AccountService
                 UpdatedAt = now
             };
 
-            await _db.SaveAsync(account, _currentUser.UserId.ToString(), connection, transaction, cancellationToken);
+            await transaction.Save(account);
 
             if (request.OpeningBalance != 0)
             {
                 var opening = new FinancialTransaction
                 {
-                    Id = Guid.NewGuid(),
                     UserId = _currentUser.UserId,
                     AccountId = account.Id,
                     Date = DateOnly.FromDateTime(now.UtcDateTime),
@@ -82,14 +100,21 @@ public sealed class AccountService
                     UpdatedAt = now
                 };
 
-                await _db.SaveAsync(opening, _currentUser.UserId.ToString(), connection, transaction, cancellationToken);
+                await transaction.Save(opening);
             }
 
-            return await GetRequiredAsync(account.Id, connection, transaction, cancellationToken);
-        }, cancellationToken);
+            var result = await GetRequiredAsync(account.Id, transaction, cancellationToken);
+            await transaction.CommitAsync();
+            return result;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
-    public Task<AccountDetailDto?> UpdateAsync(Guid accountId, UpdateAccountRequest request, CancellationToken cancellationToken)
+    public async Task<AccountDetailDto?> UpdateAsync(Guid accountId, UpdateAccountRequest request, CancellationToken cancellationToken)
     {
         ValidateAccount(request.Nickname, request.Type, request.Currency, 0, request.CreditLimit, request.InterestRate);
         if (!FinanceValues.AccountStatuses.Contains(request.Status))
@@ -97,9 +122,12 @@ public sealed class AccountService
             throw new ArgumentException("Invalid account status.");
         }
 
-        return _db.ExecuteInTransactionAsync(async (connection, transaction) =>
+        await using var transaction = _db.BeginMultiTransaction();
+        transaction.Open();
+
+        try
         {
-            var account = await GetOwnedAccountAsync(accountId, connection, transaction, cancellationToken);
+            var account = await GetOwnedAccountAsync(accountId, transaction, cancellationToken);
 
             if (account is null)
             {
@@ -117,9 +145,16 @@ public sealed class AccountService
             account.Notes = request.Notes;
             account.UpdatedAt = DateTimeOffset.UtcNow;
 
-            await _db.SaveAsync(account, _currentUser.UserId.ToString(), connection, transaction, cancellationToken);
-            return await GetRequiredAsync(accountId, connection, transaction, cancellationToken);
-        }, cancellationToken);
+            await transaction.Save(account);
+            var result = await GetRequiredAsync(accountId, transaction, cancellationToken);
+            await transaction.CommitAsync();
+            return result;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     public async Task<bool> ArchiveAsync(Guid accountId, CancellationToken cancellationToken)
@@ -134,29 +169,33 @@ public sealed class AccountService
         account.Status = "archived";
         account.UpdatedAt = DateTimeOffset.UtcNow;
 
-        await _db.SaveAsync(account, _currentUser.UserId.ToString(), cancellationToken: cancellationToken);
+        await _db.SaveAsync(account, auditUserId: _currentUser.UserId.ToString());
         return true;
     }
 
-    private async Task<AccountDetailDto> GetRequiredAsync(Guid accountId, System.Data.IDbConnection connection, System.Data.IDbTransaction transaction, CancellationToken cancellationToken)
+    private async Task<AccountDetailDto> GetRequiredAsync(Guid accountId, MultiTransaction transaction, CancellationToken cancellationToken)
     {
-        var detail = await _db.QuerySingleOrDefaultAsync<AccountDetailDto>(
-            AccountSql.SelectAccountDetail + " WHERE a.user_id = @UserId AND a.id = @AccountId GROUP BY a.id",
-            new { UserId = _currentUser.UserId, AccountId = accountId },
-            connection,
-            transaction,
-            cancellationToken);
+        var account = await transaction.QuerySelect<Account>()
+            .From<Account>()
+            .SelectAllFrom<Account>()
+            .Where(x => x.UserId == _currentUser.UserId && x.Id == accountId)
+            .FirstOrDefaultAsync();
+        if (account is null)
+        {
+            throw new InvalidOperationException("Account was not found after save.");
+        }
 
-        return detail ?? throw new InvalidOperationException("Account was not found after save.");
+        return await ToDetailDtoAsync(account, transaction, cancellationToken);
     }
 
     private async Task<Account?> GetOwnedAccountAsync(
         Guid accountId,
-        System.Data.IDbConnection? connection = null,
-        System.Data.IDbTransaction? transaction = null,
+        MultiTransaction? transaction = null,
         CancellationToken cancellationToken = default)
     {
-        var account = await _db.GetByIdAsync<Account>(accountId, connection, transaction, cancellationToken);
+        var account = transaction is null
+            ? await _db.GetByIdAsync<Account>(accountId)
+            : await transaction.GetByIdAsync<Account>(accountId);
         return account?.UserId == _currentUser.UserId ? account : null;
     }
 
@@ -187,57 +226,67 @@ public sealed class AccountService
             throw new ArgumentException("Credit limit and interest rate cannot be negative.");
         }
     }
-}
 
-internal static class AccountSql
-{
-    public const string BalanceExpression = """
-        COALESCE(SUM(
-            CASE
-                WHEN t.is_void THEN 0
-                WHEN t.status NOT IN ('posted', 'reconciled') THEN 0
-                WHEN t.direction = 'inflow' THEN t.amount
-                WHEN t.direction = 'outflow' THEN -t.amount
-                WHEN t.type IN ('income', 'opening_balance') THEN t.amount
-                WHEN t.type = 'expense' THEN -t.amount
-                ELSE 0
-            END
-        ), 0)
-        """;
+    private async Task<AccountDetailDto> ToDetailDtoAsync(
+        Account account,
+        MultiTransaction? transaction = null,
+        CancellationToken cancellationToken = default)
+    {
+        var dto = account.MapTo<Account, AccountDetailDto>();
+        dto.CurrentBalance = await CalculateBalanceAsync(account.Id, transaction, cancellationToken);
+        return dto;
+    }
 
-    public const string SelectAccountList = $"""
-        SELECT
-            a.id,
-            a.institution,
-            a.nickname,
-            a.type,
-            a.currency,
-            {BalanceExpression} AS current_balance,
-            a.status,
-            a.include_in_dashboard
-        FROM accounts a
-        LEFT JOIN transactions t ON t.account_id = a.id AND t.user_id = a.user_id
-        WHERE a.user_id = @UserId
-        GROUP BY a.id
-        """;
+    private async Task<Dictionary<Guid, decimal>> LoadBalancesAsync(
+        MultiTransaction? transaction = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = transaction is null
+            ? _db.QuerySelect<FinancialTransaction>()
+            : transaction.QuerySelect<FinancialTransaction>();
+        var transactions = await query
+            .From<FinancialTransaction>()
+            .SelectAllFrom<FinancialTransaction>()
+            .Where(transactionRow => transactionRow.UserId == _currentUser.UserId)
+            .ToListAsync();
 
-    public const string SelectAccountDetail = $"""
-        SELECT
-            a.id,
-            a.institution,
-            a.nickname,
-            a.type,
-            a.currency,
-            a.opening_balance,
-            {BalanceExpression} AS current_balance,
-            a.credit_limit,
-            a.interest_rate,
-            a.status,
-            a.include_in_dashboard,
-            a.notes,
-            a.created_at,
-            a.updated_at
-        FROM accounts a
-        LEFT JOIN transactions t ON t.account_id = a.id AND t.user_id = a.user_id
-        """;
+        return transactions
+            .Where(CountsTowardBalance)
+            .GroupBy(transactionRow => transactionRow.AccountId)
+            .ToDictionary(group => group.Key, group => group.Sum(SignedBalanceAmount));
+    }
+
+    private async Task<decimal> CalculateBalanceAsync(
+        Guid accountId,
+        MultiTransaction? transaction = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = transaction is null
+            ? _db.QuerySelect<FinancialTransaction>()
+            : transaction.QuerySelect<FinancialTransaction>();
+        var transactions = await query
+            .From<FinancialTransaction>()
+            .SelectAllFrom<FinancialTransaction>()
+            .Where(transactionRow => transactionRow.UserId == _currentUser.UserId && transactionRow.AccountId == accountId)
+            .ToListAsync();
+
+        return transactions.Where(CountsTowardBalance).Sum(SignedBalanceAmount);
+    }
+
+    internal static bool CountsTowardBalance(FinancialTransaction transaction)
+    {
+        return !transaction.IsVoid && transaction.Status is "posted" or "reconciled";
+    }
+
+    internal static decimal SignedBalanceAmount(FinancialTransaction transaction)
+    {
+        return transaction.Direction switch
+        {
+            "inflow" => transaction.Amount,
+            "outflow" => -transaction.Amount,
+            _ when transaction.Type is "income" or "opening_balance" => transaction.Amount,
+            _ when transaction.Type == "expense" => -transaction.Amount,
+            _ => 0
+        };
+    }
 }

@@ -23,6 +23,26 @@ public sealed class ImportRulesController : ControllerBase
         return Ok(await _rules.ListAsync(cancellationToken));
     }
 
+    [HttpGet("sets")]
+    public async Task<ActionResult<IReadOnlyList<ImportRuleSetDto>>> ListRuleSets(CancellationToken cancellationToken)
+    {
+        return Ok(await _rules.ListRuleSetsAsync(cancellationToken));
+    }
+
+    [HttpPost("sets")]
+    public async Task<ActionResult<ImportRuleSetDto>> CreateRuleSet(UpsertImportRuleSetRequest request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var set = await _rules.CreateRuleSetAsync(request, cancellationToken);
+            return CreatedAtAction(nameof(ListRuleSets), new { id = set.Id }, set);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     [HttpPost]
     public async Task<ActionResult<ImportRuleDto>> Create(UpsertImportRuleRequest request, CancellationToken cancellationToken)
     {

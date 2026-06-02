@@ -3,11 +3,7 @@ using System.Collections.Concurrent;
 using System.Data;
 using System.Reflection;
 using System.Text.Json;
-using System.Threading;
 using Dapper;
-using Npgsql;
-using NpgsqlTypes;
-
 namespace Mappers.DapperUtils
 {
 
@@ -19,7 +15,6 @@ namespace Mappers.DapperUtils
         // ============================
 
         private static readonly ConcurrentDictionary<Type, bool> _handlerRegistry = new();
-        private static int _defaultHandlersRegistered;
 
         // ============================
         // HANDLER REGISTRATION
@@ -49,19 +44,6 @@ namespace Mappers.DapperUtils
                     break;
                     //throw new NotSupportedException($"Unsupported FieldType: {fieldType}");
             }
-        }
-
-        public static void RegisterDefaultHandlers()
-        {
-            if (Interlocked.Exchange(ref _defaultHandlersRegistered, 1) == 1)
-                return;
-
-            DefaultTypeMap.MatchNamesWithUnderscores = true;
-            SqlMapper.AddTypeHandler(new DateOnlyTypeHandler());
-            SqlMapper.AddTypeHandler(new TimeOnlyTypeHandler());
-            TryRegisterHandler(typeof(Dictionary<string, object?>), FieldType.Jsonb);
-            TryRegisterHandler(typeof(Dictionary<string, string>), FieldType.Jsonb);
-            TryRegisterHandler(typeof(JsonDocument), FieldType.Jsonb);
         }
 
         private static void RegisterJsonB(Type type)
@@ -96,10 +78,6 @@ namespace Mappers.DapperUtils
                 parameter.Value = value == null
                     ? DBNull.Value
                     : JsonSerializer.Serialize(value);
-                if (parameter is NpgsqlParameter npgsqlParameter)
-                {
-                    npgsqlParameter.NpgsqlDbType = NpgsqlDbType.Jsonb;
-                }
             }
 
             public override T Parse(object value)
@@ -118,10 +96,6 @@ namespace Mappers.DapperUtils
                 parameter.Value = value == null
                     ? DBNull.Value
                     : JsonSerializer.Serialize(value);
-                if (parameter is NpgsqlParameter npgsqlParameter)
-                {
-                    npgsqlParameter.NpgsqlDbType = NpgsqlDbType.Json;
-                }
             }
 
             public override T Parse(object value)
@@ -130,53 +104,6 @@ namespace Mappers.DapperUtils
                     return default!;
 
                 return JsonSerializer.Deserialize<T>(value.ToString()!)!;
-            }
-        }
-
-        private sealed class DateOnlyTypeHandler : SqlMapper.TypeHandler<DateOnly>
-        {
-            public override void SetValue(IDbDataParameter parameter, DateOnly value)
-            {
-                parameter.Value = value.ToDateTime(TimeOnly.MinValue);
-                if (parameter is NpgsqlParameter npgsqlParameter)
-                {
-                    npgsqlParameter.NpgsqlDbType = NpgsqlDbType.Date;
-                }
-            }
-
-            public override DateOnly Parse(object value)
-            {
-                return value switch
-                {
-                    DateOnly dateOnly => dateOnly,
-                    DateTime dateTime => DateOnly.FromDateTime(dateTime),
-                    string text => DateOnly.Parse(text),
-                    _ => DateOnly.FromDateTime(Convert.ToDateTime(value))
-                };
-            }
-        }
-
-        private sealed class TimeOnlyTypeHandler : SqlMapper.TypeHandler<TimeOnly>
-        {
-            public override void SetValue(IDbDataParameter parameter, TimeOnly value)
-            {
-                parameter.Value = value.ToTimeSpan();
-                if (parameter is NpgsqlParameter npgsqlParameter)
-                {
-                    npgsqlParameter.NpgsqlDbType = NpgsqlDbType.Time;
-                }
-            }
-
-            public override TimeOnly Parse(object value)
-            {
-                return value switch
-                {
-                    TimeOnly timeOnly => timeOnly,
-                    TimeSpan timeSpan => TimeOnly.FromTimeSpan(timeSpan),
-                    DateTime dateTime => TimeOnly.FromDateTime(dateTime),
-                    string text => TimeOnly.Parse(text),
-                    _ => TimeOnly.FromTimeSpan((TimeSpan)value)
-                };
             }
         }
 

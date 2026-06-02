@@ -1,0 +1,7 @@
+insert_type,id,title,description,status,priority,effort,scope,phase
+insert,,"FT-P4-0012 Add storage room workflow","Added storage_files schema, storage upload/list API, storage page, and import-from-storage flow.",5,2,3,Fullstack,"Phase 4 cleanup"
+insert,,"FT-P4-0013 Add import rule sets and field mapping rules","Added import rule sets plus source-field to target-field mapping rules with amount sign transforms.",5,2,3,Fullstack,"Phase 4 cleanup"
+insert,,"FT-P4-0014 Add import rule edit/delete UI","Updated import rules UI to support edit and delete actions.",5,2,2,Frontend,"Phase 4 cleanup"
+insert,,"FT-P4-0015 Move dashboard account selection to dashboard","Removed account-level dashboard inclusion from the accounts UI and added dashboard account selectors.",5,2,2,Fullstack,"Phase 4 cleanup"
+insert,,"FT-P4-0016 Add enum display labels","Added frontend enum display formatting across account, transaction, dashboard, and import screens.",5,3,1,Frontend,"Phase 4 cleanup"
+insert,,"FT-P4-0017 Enforce GUID primary key defaults","Added Liquibase defaults and AGENTS guidance for Guid primary keys plus entity-side Guid.NewGuid initializers.",5,2,1,Backend,"Phase 4 cleanup"

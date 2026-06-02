@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Dapper;
 
@@ -25,6 +26,7 @@ public class BulkDeleteOptions
     public IDbConnection? CurrentConnection { get; set; }
     public IDbTransaction? Transaction { get; set; }
     public IReadOnlyList<IDbInterceptor>? Interceptors { get; set; }
+    public CancellationToken CancellationToken { get; set; } = default;
     public string? UserId { get; set; }
 }
 
@@ -52,7 +54,8 @@ public static partial class OrmMapper
         IDbTransaction? trans = null,
         bool useTransaction = true,
         string userId = "System",
-        IReadOnlyList<IDbInterceptor>? interceptors = null) where T : class, new()
+        IReadOnlyList<IDbInterceptor>? interceptors = null,
+        CancellationToken cancellationToken = default) where T : class, new()
     {
         if (entity == null) return false;
 
@@ -63,7 +66,8 @@ public static partial class OrmMapper
             CurrentConnection = conn,
             Transaction = trans,
             UserId = userId,
-            Interceptors = interceptors
+            Interceptors = interceptors,
+            CancellationToken = cancellationToken
         };
 
         // Standardize connection handling
@@ -132,7 +136,8 @@ public static partial class OrmMapper
         IDbTransaction? trans = null,
         bool useTransaction = true,
         string userId = "System",
-        IReadOnlyList<IDbInterceptor>? interceptors = null) where T : class, new()
+        IReadOnlyList<IDbInterceptor>? interceptors = null,
+        CancellationToken cancellationToken = default) where T : class, new()
     {
         if (id == null) return false;
 
@@ -140,11 +145,11 @@ public static partial class OrmMapper
         var depth = deleteQuery?.Depth ?? (deleteType == DeleteType.Light ? 0 : -1);
 
         // Note: Assuming GetByIdAsync exists in your OrmMapper partial
-        var entity = await GetByIdAsync<T>(id, depth);
+        var entity = await GetByIdAsync<T>(id, depth, selectQuery: new SelectQuery { CurrentConnection = conn, CurrentTransaction = trans, CancellationToken = cancellationToken });
 
         if (entity == null) return false;
 
-        return await DeleteAsync(entity, deleteType, deleteQuery, conn, trans, useTransaction, userId, interceptors);
+        return await DeleteAsync(entity, deleteType, deleteQuery, conn, trans, useTransaction, userId, interceptors, cancellationToken);
     }
 
     /// <summary>
@@ -234,7 +239,7 @@ public static partial class OrmMapper
             new[] { entity },
             DeleteType.Full,
             isSoftDelete: false);
-        await RunBeforeDeleteInterceptorsAsync(context, options.Interceptors);
+        await RunBeforeDeleteInterceptorsAsync(context, options.Interceptors, options.CancellationToken);
 
         // Delete THIS Table Record
         // We delete the specific derived table record first.
@@ -242,8 +247,8 @@ public static partial class OrmMapper
         var pkValue = metadata.PrimaryKey.Property.GetValue(entity);
         string deleteSql = $"DELETE FROM \"{metadata.TableName}\" WHERE \"{metadata.PrimaryKey.ColumnName}\" = @Id";
 
-        await options.CurrentConnection.ExecuteAsync(deleteSql, new { Id = pkValue }, options.Transaction);
-        await RunAfterDeleteInterceptorsAsync(context, options.Interceptors);
+        await options.CurrentConnection.ExecuteAsync(new CommandDefinition(deleteSql, new { Id = pkValue }, options.Transaction, cancellationToken: options.CancellationToken));
+        await RunAfterDeleteInterceptorsAsync(context, options.Interceptors, options.CancellationToken);
 
         // 3. Delete Base (Inheritance Recursion)
         // "Delete from inherited until no more inheritance"
@@ -265,7 +270,8 @@ public static partial class OrmMapper
                 UserId = options.UserId,
                 UseTransaction = false, // Already in one
                 DeleteQuery = DeleteQuery.WithDepth(options.DeleteQuery.Depth - 1),
-                Interceptors = options.Interceptors
+                Interceptors = options.Interceptors,
+                CancellationToken = options.CancellationToken
             };
 
             foreach (var fkProp in metadata.ForeignKeys)
@@ -310,15 +316,15 @@ public static partial class OrmMapper
             new object[] { entity! },
             deleteType,
             isSoftDelete: true);
-        await RunBeforeDeleteInterceptorsAsync(context, options.Interceptors);
+        await RunBeforeDeleteInterceptorsAsync(context, options.Interceptors, options.CancellationToken);
 
-        var rows = await options.CurrentConnection.ExecuteAsync(sql, new { pkValue }, options.Transaction);
+        var rows = await options.CurrentConnection.ExecuteAsync(new CommandDefinition(sql, new { pkValue }, options.Transaction, cancellationToken: options.CancellationToken));
         if (rows > 0 && metadata.SoftDeleteProperty != null)
         {
             metadata.SoftDeleteProperty.Property.SetValue(entity, true);
         }
 
-        await RunAfterDeleteInterceptorsAsync(context, options.Interceptors);
+        await RunAfterDeleteInterceptorsAsync(context, options.Interceptors, options.CancellationToken);
         return rows > 0;
     }
 }

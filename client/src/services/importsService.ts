@@ -5,6 +5,7 @@ import type {
   ImportCommitResult,
   ImportPreviewRowDto,
   ImportRuleDto,
+  ImportRuleSetDto,
   ParsedImportDto,
   PreviewImportRequest,
   TestClassificationRuleResult,
@@ -27,6 +28,13 @@ export function uploadImport(accountId: string, institution: string, file: File)
   return apiRequest<UploadImportResponse>('/imports/upload', {
     method: 'POST',
     body: form,
+  });
+}
+
+export function createImportFromStorage(accountId: string, institution: string, fileName: string): Promise<UploadImportResponse> {
+  return apiRequest<UploadImportResponse>('/imports/from-storage', {
+    method: 'POST',
+    body: JSON.stringify({ accountId, institution, fileName }),
   });
 }
 
@@ -60,11 +68,33 @@ export function listImportRules(): Promise<ImportRuleDto[]> {
   return apiRequest<ImportRuleDto[]>('/import-rules');
 }
 
+export function listImportRuleSets(): Promise<ImportRuleSetDto[]> {
+  return apiRequest<ImportRuleSetDto[]>('/import-rules/sets');
+}
+
+export function createImportRuleSet(name: string, institution?: string): Promise<ImportRuleSetDto> {
+  return apiRequest<ImportRuleSetDto>('/import-rules/sets', {
+    method: 'POST',
+    body: JSON.stringify({ name, institution, isActive: true }),
+  });
+}
+
 export function createImportRule(request: UpsertImportRuleRequest): Promise<ImportRuleDto> {
   return apiRequest<ImportRuleDto>('/import-rules', {
     method: 'POST',
     body: JSON.stringify(request),
   });
+}
+
+export function updateImportRule(id: string, request: UpsertImportRuleRequest): Promise<ImportRuleDto> {
+  return apiRequest<ImportRuleDto>(`/import-rules/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(request),
+  });
+}
+
+export function deleteImportRule(id: string): Promise<void> {
+  return apiRequest<void>(`/import-rules/${id}`, { method: 'DELETE' });
 }
 
 export function testImportRule(rawDescription: string): Promise<TestImportRuleResult> {

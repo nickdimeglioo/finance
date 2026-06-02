@@ -4,7 +4,7 @@ namespace FinanceTracker.Api.Features.Accounts;
 public sealed class Account
 {
     [PrimaryKey]
-    public Guid Id { get; set; }
+    public Guid Id { get; set; } = Guid.NewGuid();
 
     public Guid UserId { get; set; }
     public string? Institution { get; set; }
@@ -19,5 +19,5 @@ public sealed class Account
     public string? Notes { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
-}
 
+}
