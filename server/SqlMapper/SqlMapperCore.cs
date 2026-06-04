@@ -958,6 +958,35 @@ public static partial class OrmMapper
         return allResults;
     }
 
+
+    private static object GetTypedArray(Type type, List<object>? objList)
+    {
+        object parameters;
+
+        if(objList == null || !objList.Any()) return new { };
+        if (type == typeof(string))
+        {
+            parameters = new { ids = objList.Cast<string>().ToArray() };
+        }
+        else if (type == typeof(int))
+        {
+            parameters = new { ids = objList.Cast<int>().ToArray() };
+        }
+        else if (type == typeof(Guid))
+        {
+            parameters = new { ids = objList.Cast<Guid>().ToArray() };
+        }
+        else if (type == typeof(long))
+        {
+            parameters = new { ids = objList.Cast<long>().ToArray() };
+        }
+        else
+        {
+            parameters = new { ids = objList.ToArray<object>() };
+        }
+        return parameters;
+    }
+
     // NEW: Optimized batch loading with JOINs instead of N+1 queries
     private static async Task<IEnumerable<T>> GetBatchWithJoinsAsync<T>(IDbConnection connection, ClassMetadata metadata, List<object>? ids, int depth, HashSet<Type> ignoredTypes, SelectQuery? selectQuery) where T : class, new()
     {
@@ -970,32 +999,32 @@ public static partial class OrmMapper
         // Build complex query with all FK joins for efficient loading
         var (sql, splitMapping, _) = BuildOptimizedSelectWithJoins(metadata, depth, ignoredTypes, selectQuery);
 
-        object parameters;
-        if(ids?.Any() == true) //TODO: really need to break parameter building into its own function, this is dumb
-        {
-            if(metadata.PrimaryKey.Property.PropertyType == typeof(string))
-            {
-                parameters = new { ids = ids.Cast<string>().ToArray() };
-            }else if (metadata.PrimaryKey.Property.PropertyType == typeof(int))
-            {
-                parameters = new { ids = ids.Cast<int>().ToArray() };
-            }else if (metadata.PrimaryKey.Property.PropertyType == typeof(Guid))
-            {
-                parameters = new { ids = ids.Cast<Guid>().ToArray() };
-            }
-            else if (metadata.PrimaryKey.Property.PropertyType == typeof(long))
-            {
-                parameters = new { ids = ids.Cast<long>().ToArray() };
-            }
-            else
-            {
-                parameters = new { ids = ids.Cast<object>().ToArray() };
-            }
-        }
-        else
-        {
-            parameters = new { };
-        }
+        object parameters = GetTypedArray(metadata.PrimaryKey.Property.PropertyType, ids);
+        //if(ids?.Any() == true) //TODO: really need to break parameter building into its own function, this is dumb
+        //{
+        //    if(metadata.PrimaryKey.Property.PropertyType == typeof(string))
+        //    {
+        //        parameters = new { ids = ids.Cast<string>().ToArray() };
+        //    }else if (metadata.PrimaryKey.Property.PropertyType == typeof(int))
+        //    {
+        //        parameters = new { ids = ids.Cast<int>().ToArray() };
+        //    }else if (metadata.PrimaryKey.Property.PropertyType == typeof(Guid))
+        //    {
+        //        parameters = new { ids = ids.Cast<Guid>().ToArray() };
+        //    }
+        //    else if (metadata.PrimaryKey.Property.PropertyType == typeof(long))
+        //    {
+        //        parameters = new { ids = ids.Cast<long>().ToArray() };
+        //    }
+        //    else
+        //    {
+        //        parameters = new { ids = ids.Cast<object>().ToArray() };
+        //    }
+        //}
+        //else
+        //{
+        //    parameters = new { };
+        //}
 
         if (ids != null && ids.Count != 0)
         {
@@ -1026,17 +1055,15 @@ public static partial class OrmMapper
             .Select(p => $"\"{p.ColumnName}\" as \"{p.Property.Name}\"");
 
         string sql;
-        object parameters;
+        object parameters = GetTypedArray(metadata.PrimaryKey.Property.PropertyType, ids);
 
         if (ids?.Any() == true)
         {
             sql = $"SELECT {string.Join(", ", columns)} FROM \"{metadata.TableName}\" WHERE \"{metadata.PrimaryKey.ColumnName}\" = ANY(@ids)";
-            parameters = new { ids = ids.ToArray() };
         }
         else
         {
             sql = $"SELECT {string.Join(", ", columns)} FROM \"{metadata.TableName}\"";
-            parameters = new { };
         }
         if (ShouldFilterSoftDeleted(metadata, selectQuery))
         {

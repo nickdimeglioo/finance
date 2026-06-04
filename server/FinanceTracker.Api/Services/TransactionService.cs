@@ -25,12 +25,16 @@ public sealed class TransactionService
         var pageSize = Math.Clamp(filters.PageSize, 1, 250);
         var filtered = await LoadFilteredTransactionsAsync(filters, cancellationToken: cancellationToken);
         var total = filtered.Count;
-        var items = filtered
+        var pageEntities = filtered
             .OrderByDescending(transaction => transaction.Date)
             .ThenByDescending(transaction => transaction.CreatedAt)
             .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .MapToList<FinancialTransaction, TransactionListItemDto>();
+            .Take(pageSize).ToList();
+        var items = pageEntities.MapToList<FinancialTransaction, TransactionListItemDto>();
+        foreach (var (item, entity) in items.Zip(pageEntities))
+        {
+            item.Tags = ReadTags(entity.Tags);
+        }
 
         return new PagedResult<TransactionListItemDto>(items, page, pageSize, total);
     }
@@ -430,6 +434,7 @@ public sealed class TransactionService
         CancellationToken cancellationToken = default)
     {
         var detail = entity.MapTo<FinancialTransaction, TransactionDetailDto>();
+        detail.Tags = ReadTags(entity.Tags);
         var query = transaction is null
             ? _db.QuerySelect<TransactionSplit>()
             : transaction.QuerySelect<TransactionSplit>();
@@ -443,5 +448,10 @@ public sealed class TransactionService
             .ThenBy(split => split.Id)
             .MapToList<TransactionSplit, TransactionSplitDto>();
         return detail;
+    }
+
+    private static IReadOnlyList<string> ReadTags(string tags)
+    {
+        return RulesetJson.Read<IReadOnlyList<string>>(tags, []);
     }
 }

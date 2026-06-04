@@ -9,3 +9,5 @@ databaseChangeLog:
       file: changelog/003-phase-4-imports-rules.sql
   - include:
       file: changelog/004-phase-4-cleanup-storage-rulesets.sql
+  - include:
+      file: changelog/005-ruleset-rebuild.sql

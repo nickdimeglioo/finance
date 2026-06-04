@@ -87,3 +87,32 @@ FT-P4-0014 - Add import rule edit/delete UI, done in phase 4 cleanup
 FT-P4-0015 - Move dashboard account selection to dashboard, done in phase 4 cleanup
 FT-P4-0016 - Add enum display labels, done in phase 4 cleanup
 FT-P4-0017 - Enforce GUID primary key defaults, done in phase 4 cleanup
+
+Pass 5 ruleset rebuild
+----------------------
+FT-P5-0001 - Replace legacy import rules with ruleset aggregate, done in pass 5 ruleset rebuild
+FT-P5-0002 - Build ruleset CRUD and import/export API, done in pass 5 ruleset rebuild
+FT-P5-0003 - Implement CSV parser service for rulesets, done in pass 5 ruleset rebuild
+FT-P5-0004 - Implement mapping engine, done in pass 5 ruleset rebuild
+FT-P5-0005 - Implement classification engine, done in pass 5 ruleset rebuild
+FT-P5-0006 - Add import job orchestration, done in pass 5 ruleset rebuild
+
+Pass 6 rule management UI
+-------------------------
+FT-P6-0001 - Add classification rule delete UI, done in pass 6 rule management UI
+FT-P6-0002 - Add import rule JSON/CSV draft import UI, done in pass 6 rule management UI
+FT-P6-0003 - Add classification rule JSON/CSV draft import UI, done in pass 6 rule management UI
+FT-P6-0004 - Add rule prompt copy helpers, done in pass 6 rule management UI
+
+Pass 7 local object storage
+---------------------------
+FT-P7-0001 - Add local object storage provider, done in pass 7 local object storage
+FT-P7-0002 - Make object storage provider configurable, done in pass 7 local object storage
+FT-P7-0003 - Default development storage to local, done in pass 7 local object storage
+
+Pass 8 ruleset engine enhancement
+---------------------------------
+FT-P8-0001 - Unify ruleset mapping and enrichment rules, done in pass 8 ruleset engine enhancement
+FT-P8-0002 - Add field rule flow steps, done in pass 8 ruleset engine enhancement
+FT-P8-0003 - Add import tags from rulesets, done in pass 8 ruleset engine enhancement
+FT-P8-0004 - Replace import column mapping UI, done in pass 8 ruleset engine enhancement

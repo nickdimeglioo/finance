@@ -17,6 +17,7 @@ public sealed class ImportBatch
     public int AcceptedCount { get; set; }
     public int DuplicateCount { get; set; }
     public int ErrorCount { get; set; }
+    [DBType("jsonb")]
     public string Metadata { get; set; } = "{}";
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }

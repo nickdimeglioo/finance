@@ -4,14 +4,18 @@ import type {
   ImportBatchDto,
   ImportCommitResult,
   ImportPreviewRowDto,
+  ImportJobDto,
   ImportRuleDto,
   ImportRuleSetDto,
   ParsedImportDto,
   PreviewImportRequest,
+  RulesetDto,
+  RulesetImportResult,
   TestClassificationRuleResult,
   TestImportRuleResult,
   UpdateImportPreviewRowRequest,
   UploadImportResponse,
+  UpsertRulesetRequest,
   UpsertClassificationRuleRequest,
   UpsertImportRuleRequest,
 } from '../types/schema';
@@ -115,9 +119,74 @@ export function createClassificationRule(request: UpsertClassificationRuleReques
   });
 }
 
+export function deleteClassificationRule(id: string): Promise<void> {
+  return apiRequest<void>(`/classification-rules/${id}`, { method: 'DELETE' });
+}
+
 export function testClassificationRule(description: string, amount: number): Promise<TestClassificationRuleResult> {
   return apiRequest<TestClassificationRuleResult>('/classification-rules/test', {
     method: 'POST',
     body: JSON.stringify({ description, amount }),
+  });
+}
+
+export function listRulesets(): Promise<RulesetDto[]> {
+  return apiRequest<RulesetDto[]>('/rulesets');
+}
+
+export function getRuleset(id: string): Promise<RulesetDto> {
+  return apiRequest<RulesetDto>(`/rulesets/${id}`);
+}
+
+export function createRuleset(request: UpsertRulesetRequest): Promise<RulesetDto> {
+  return apiRequest<RulesetDto>('/rulesets', {
+    method: 'POST',
+    body: JSON.stringify(request),
+  });
+}
+
+export function updateRuleset(id: string, request: UpsertRulesetRequest): Promise<RulesetDto> {
+  return apiRequest<RulesetDto>(`/rulesets/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(request),
+  });
+}
+
+export function deleteRuleset(id: string): Promise<void> {
+  return apiRequest<void>(`/rulesets/${id}`, { method: 'DELETE' });
+}
+
+export function importRulesetJson(ruleset: RulesetDto): Promise<RulesetDto> {
+  return apiRequest<RulesetDto>('/rulesets/import-json', {
+    method: 'POST',
+    body: JSON.stringify({ ruleset }),
+  });
+}
+
+export function exportRuleset(id: string): Promise<RulesetDto> {
+  return apiRequest<RulesetDto>(`/rulesets/${id}/export`);
+}
+
+export function previewRulesetImport(accountId: string, rulesetId: string, file: File, deduplicationStrategy = 'skip'): Promise<RulesetImportResult> {
+  return runRulesetImportRequest('/import/preview', accountId, rulesetId, file, deduplicationStrategy);
+}
+
+export function runRulesetImport(accountId: string, rulesetId: string, file: File, deduplicationStrategy = 'skip'): Promise<RulesetImportResult> {
+  return runRulesetImportRequest('/import/run', accountId, rulesetId, file, deduplicationStrategy);
+}
+
+export function getImportJob(jobId: string): Promise<ImportJobDto> {
+  return apiRequest<ImportJobDto>(`/import/jobs/${jobId}`);
+}
+
+function runRulesetImportRequest(path: string, accountId: string, rulesetId: string, file: File, deduplicationStrategy: string): Promise<RulesetImportResult> {
+  const form = new FormData();
+  form.set('accountId', accountId);
+  form.set('rulesetId', rulesetId);
+  form.set('deduplicationStrategy', deduplicationStrategy);
+  form.set('file', file);
+  return apiRequest<RulesetImportResult>(path, {
+    method: 'POST',
+    body: form,
   });
 }

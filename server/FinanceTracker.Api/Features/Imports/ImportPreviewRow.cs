@@ -8,6 +8,7 @@ public sealed class ImportPreviewRow
 
     public Guid ImportBatchId { get; set; }
     public int RowNumber { get; set; }
+    [DBType("jsonb")]
     public string RawData { get; set; } = "{}";
     public string? RawDescription { get; set; }
     public string? CleanedDescription { get; set; }
@@ -19,6 +20,7 @@ public sealed class ImportPreviewRow
     public string? ImportHash { get; set; }
     public bool IsDuplicate { get; set; }
     public bool Accepted { get; set; } = true;
+    [DBType("jsonb")]
     public string Errors { get; set; } = "[]";
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }

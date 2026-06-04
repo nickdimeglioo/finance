@@ -57,6 +57,8 @@ export interface TransactionListItemDto {
   type: TransactionType;
   classification: TransactionClassification;
   category?: string | null;
+  subcategory?: string | null;
+  tags: string[];
   amount: number;
   currency: string;
   direction: TransactionDirection;
@@ -77,6 +79,10 @@ export interface TransactionSplitDto {
 
 export interface TransactionDetailDto extends TransactionListItemDto {
   importHash?: string | null;
+  uniqueId?: string | null;
+  rulesetId?: string | null;
+  rulesetVersion?: number | null;
+  matchedClassificationRuleId?: string | null;
   recurringRuleId?: string | null;
   splits: TransactionSplitDto[];
   createdAt: string;
@@ -343,4 +349,132 @@ export interface StorageFileDto {
   purpose: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface RulesetSourceConfigDto {
+  delimiter?: string | null;
+  encoding?: string | null;
+  expectedColumns?: string[] | null;
+}
+
+export interface RulesetRulesDocumentDto {
+  onError?: string | null;
+  fallback?: RulesetFallbackDto | null;
+  rules?: RulesetRuleDefinitionDto[] | null;
+}
+
+export interface RulesetRuleDefinitionDto {
+  id: string;
+  name?: string | null;
+  priority: number;
+  kind: 'field' | 'enrichment' | string;
+  isActive: boolean;
+  target?: string | null;
+  match?: ClassificationConditionDto | null;
+  flow?: RulesetRuleStepDto[] | null;
+  output?: RulesetRuleOutputDto | null;
+}
+
+export interface RulesetRuleStepDto {
+  when?: ClassificationConditionDto | null;
+  source?: string | null;
+  value?: unknown;
+  transform?: MappingTransformDto | null;
+  expr?: string | null;
+}
+
+export interface MappingTransformDto {
+  type: string;
+  format?: string | null;
+  value?: string | null;
+}
+
+export interface RulesetFallbackDto {
+  merchant?: string | null;
+  category?: string | null;
+  subcategory?: string | null;
+  classification?: TransactionClassification | null;
+  tags?: string[] | null;
+}
+
+export interface ClassificationConditionDto {
+  op: string;
+  field?: string | null;
+  value?: unknown;
+  conditions?: ClassificationConditionDto[] | null;
+}
+
+export interface RulesetRuleOutputDto {
+  merchant?: string | null;
+  category?: string | null;
+  subcategory?: string | null;
+  classification?: TransactionClassification | null;
+  tags?: string[] | null;
+}
+
+export interface RulesetDto {
+  id: string;
+  name: string;
+  description?: string | null;
+  version: number;
+  sourceConfig: RulesetSourceConfigDto;
+  rules: RulesetRulesDocumentDto;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertRulesetRequest {
+  name: string;
+  description?: string | null;
+  sourceConfig?: RulesetSourceConfigDto | null;
+  rules?: RulesetRulesDocumentDto | null;
+  isActive: boolean;
+}
+
+export interface ImportJobErrorDto {
+  row: number;
+  column?: string | null;
+  message: string;
+}
+
+export interface ImportJobDto {
+  id: string;
+  accountId: string;
+  rulesetId: string;
+  rulesetVersion: number;
+  fileName: string;
+  status: 'pending' | 'processing' | 'complete' | 'failed';
+  totalRows: number;
+  successRows: number;
+  skippedRows: number;
+  errorRows: number;
+  errors: ImportJobErrorDto[];
+  isDryRun: boolean;
+  startedAt: string;
+  completedAt?: string | null;
+}
+
+export interface RulesetImportPreviewRowDto {
+  rowNumber: number;
+  rawRow: Record<string, string>;
+  date?: string | null;
+  amount?: number | null;
+  type?: TransactionType | null;
+  description?: string | null;
+  merchant?: string | null;
+  category?: string | null;
+  subcategory?: string | null;
+  classification?: TransactionClassification | null;
+  tags: string[];
+  uniqueId?: string | null;
+  isDuplicate: boolean;
+  accepted: boolean;
+  matchedRuleIds: string[];
+  errors: ImportJobErrorDto[];
+}
+
+export interface RulesetImportResult {
+  job: ImportJobDto;
+  previewRows: RulesetImportPreviewRowDto[];
 }

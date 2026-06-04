@@ -1,6 +1,6 @@
 # Financial Tracker
 
-Personal finance tracker planned around a React frontend, ASP.NET Core backend, PostgreSQL, Liquibase migrations, and S3-compatible object storage.
+Personal finance tracker planned around a React frontend, ASP.NET Core backend, PostgreSQL, Liquibase migrations, and object storage with local and S3-compatible providers.
 
 ## Planning Sources
 
@@ -17,15 +17,15 @@ Reserved for this app so it can run beside the pipeline project:
 | Frontend Vite | `5273` |
 | Backend API | `8353` |
 | PostgreSQL | `5438` |
-| MinIO/S3 API | `9000` |
-| MinIO console | `9011` |
+| MinIO/S3 API, optional | `9000` |
+| MinIO console, optional | `9011` |
 
 ## Infrastructure Decisions
 
 - Use the pipeline template's auth/login/account patterns instead of rebuilding auth.
 - Use the template's `SqlMapper`/`IOrmMapperService` style for finance domain data unless the linked project dictates otherwise.
 - Use Liquibase under `db/liquibase` for database migrations.
-- Store import files and generated exports in S3-compatible object storage; store only object keys and metadata in PostgreSQL.
+- Store import files and generated exports through the object-storage abstraction; local development defaults to ignored repo-root `storage/`, while the S3-compatible provider is retained for MinIO or remote storage later.
 - Keep deterministic finance rules explainable and overridable.
 
 ## Task Board

@@ -216,7 +216,7 @@ public sealed class ImportService
                         ? BuildImportHash(batch.AccountId, mapped.Date!.Value, amount, cleaned!)
                         : null;
                     var duplicate = importHash is not null && (!seenHashes.Add(importHash) || existingHashes.Contains(importHash));
-
+                    
                     var row = new ImportPreviewRow
                     {
                         Id = Guid.NewGuid(),
@@ -237,6 +237,7 @@ public sealed class ImportService
                         CreatedAt = now,
                         UpdatedAt = now
                     };
+                    //row.Type = "expense";
 
                     await transaction.Save(row);
                     previewRows.Add(row);

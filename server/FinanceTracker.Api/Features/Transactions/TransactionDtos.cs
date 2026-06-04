@@ -1,3 +1,4 @@
+using FinanceTracker.Api.Mapping;
 using FinanceTracker.Api.Features.Shared;
 
 namespace FinanceTracker.Api.Features.Transactions;
@@ -13,6 +14,9 @@ public sealed class TransactionListItemDto
     public string Type { get; set; } = string.Empty;
     public string Classification { get; set; } = string.Empty;
     public string? Category { get; set; }
+    public string? Subcategory { get; set; }
+    [MapFrom("TagsJson")]
+    public IReadOnlyList<string> Tags { get; set; } = [];
     public decimal Amount { get; set; }
     public string Currency { get; set; } = "USD";
     public string Direction { get; set; } = "neutral";
@@ -40,6 +44,13 @@ public sealed class TransactionDetailDto
     public string Status { get; set; } = string.Empty;
     public string Source { get; set; } = string.Empty;
     public string? ImportHash { get; set; }
+    public string? UniqueId { get; set; }
+    public Guid? RulesetId { get; set; }
+    public int? RulesetVersion { get; set; }
+    public string? MatchedClassificationRuleId { get; set; }
+    public string? Subcategory { get; set; }
+    [MapFrom("TagsJson")]
+    public IReadOnlyList<string> Tags { get; set; } = [];
     public bool IsVoid { get; set; }
     public bool IsSplit { get; set; }
     public Guid? TransferPartnerId { get; set; }

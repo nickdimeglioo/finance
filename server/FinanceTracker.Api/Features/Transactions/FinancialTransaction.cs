@@ -21,6 +21,15 @@ public sealed class FinancialTransaction
     public string Status { get; set; } = "posted";
     public string Source { get; set; } = "manual";
     public string? ImportHash { get; set; }
+    public string? UniqueId { get; set; }
+    public Guid? RulesetId { get; set; }
+    public int? RulesetVersion { get; set; }
+    public string? MatchedClassificationRuleId { get; set; }
+    public string? Subcategory { get; set; }
+    [DBType("jsonb")]
+    public string Tags { get; set; } = "[]";
+    [DBType("jsonb")]
+    public string RawRow { get; set; } = "{}";
     public bool IsVoid { get; set; }
     public bool IsSplit { get; set; }
     public Guid? TransferPartnerId { get; set; }

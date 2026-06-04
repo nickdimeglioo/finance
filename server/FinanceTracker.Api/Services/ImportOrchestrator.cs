@@ -1,0 +1,276 @@
+using System.Security.Cryptography;
+using System.Text;
+using FinanceTracker.Api.Features.Accounts;
+using FinanceTracker.Api.Features.Imports;
+using FinanceTracker.Api.Features.Rules;
+using FinanceTracker.Api.Features.Shared;
+using FinanceTracker.Api.Features.Transactions;
+using PipelineRunner.Services;
+
+namespace FinanceTracker.Api.Services;
+
+public sealed class ImportOrchestrator
+{
+    private const int PreviewRowLimit = 20;
+
+    private readonly ICurrentUserContext _currentUser;
+    private readonly IOrmMapperService _db;
+    private readonly RulesetService _rulesets;
+    private readonly CsvParserService _parser;
+    private readonly MappingEngine _mapping;
+    private readonly RulesetClassificationEngine _classification;
+    private readonly DeduplicationService _deduplication;
+
+    public ImportOrchestrator(
+        ICurrentUserContext currentUser,
+        IOrmMapperService db,
+        RulesetService rulesets,
+        CsvParserService parser,
+        MappingEngine mapping,
+        RulesetClassificationEngine classification,
+        DeduplicationService deduplication)
+    {
+        _currentUser = currentUser;
+        _db = db;
+        _rulesets = rulesets;
+        _parser = parser;
+        _mapping = mapping;
+        _classification = classification;
+        _deduplication = deduplication;
+    }
+
+    public async Task<RulesetImportResult> PreviewAsync(RulesetImportRequest request, IFormFile file, CancellationToken cancellationToken)
+    {
+        return await RunAsync(request, file, isDryRun: true, cancellationToken);
+    }
+
+    public async Task<RulesetImportResult> RunAsync(RulesetImportRequest request, IFormFile file, CancellationToken cancellationToken)
+    {
+        return await RunAsync(request, file, isDryRun: false, cancellationToken);
+    }
+
+    public async Task<ImportJobDto?> GetJobAsync(Guid jobId, CancellationToken cancellationToken)
+    {
+        var job = await _db.GetByIdAsync<ImportJob>(jobId, depth: 0);
+        return job?.UserId == _currentUser.UserId ? ToDto(job) : null;
+    }
+
+    private async Task<RulesetImportResult> RunAsync(RulesetImportRequest request, IFormFile file, bool isDryRun, CancellationToken cancellationToken)
+    {
+        var account = await _db.GetByIdAsync<Account>(request.AccountId, depth: 0);
+        if (account?.UserId != _currentUser.UserId)
+        {
+            throw new ArgumentException("Account was not found.");
+        }
+
+        var ruleset = await _rulesets.GetOwnedActiveEntityAsync(request.RulesetId, cancellationToken);
+        if (ruleset is null)
+        {
+            throw new ArgumentException("Ruleset was not found.");
+        }
+
+        var started = DateTimeOffset.UtcNow;
+        var job = new ImportJob
+        {
+            Id = Guid.NewGuid(),
+            UserId = _currentUser.UserId,
+            AccountId = account.Id,
+            RulesetId = ruleset.Id,
+            RulesetVersion = ruleset.Version,
+            FileName = Path.GetFileName(file.FileName),
+            Status = "processing",
+            IsDryRun = isDryRun,
+            StartedAt = started,
+            CreatedAt = started,
+            UpdatedAt = started
+        };
+
+        await _db.SaveAsync(job, auditUserId: _currentUser.UserId.ToString());
+
+        try
+        {
+            var parsed = await _parser.ParseAsync(file, ruleset, cancellationToken);
+            var mappedRows = _mapping.Map(parsed, ruleset);
+            var classifiedRows = mappedRows.Select(row => _classification.Classify(row, ruleset)).ToList();
+            var existingUniqueIds = await _deduplication.LoadExistingUniqueIdsAsync(account.Id, transaction: null, cancellationToken);
+            var seenUniqueIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var preview = BuildPreview(classifiedRows, existingUniqueIds, seenUniqueIds);
+
+            if (!isDryRun)
+            {
+                await CommitAsync(account, ruleset, classifiedRows, preview, cancellationToken);
+            }
+
+            var allErrors = parsed.Errors.Concat(preview.SelectMany(row => row.Errors)).ToList();
+            job.TotalRows = parsed.Rows.Count;
+            job.SuccessRows = preview.Count(row => row.Accepted);
+            job.SkippedRows = preview.Count(row => row.IsDuplicate || !row.Accepted);
+            job.ErrorRows = preview.Count(row => row.Errors.Count > 0) + parsed.Errors.Count;
+            job.Errors = RulesetJson.Write(allErrors);
+            job.Status = "complete";
+            job.CompletedAt = DateTimeOffset.UtcNow;
+            job.UpdatedAt = job.CompletedAt.Value;
+            await _db.SaveAsync(job, auditUserId: _currentUser.UserId.ToString());
+
+            return new RulesetImportResult(ToDto(job), preview.Take(PreviewRowLimit).ToList());
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or FormatException)
+        {
+            job.Status = "failed";
+            job.Errors = RulesetJson.Write(new[] { new ImportJobErrorDto(0, null, ex.Message) });
+            job.CompletedAt = DateTimeOffset.UtcNow;
+            job.UpdatedAt = job.CompletedAt.Value;
+            await _db.SaveAsync(job, auditUserId: _currentUser.UserId.ToString());
+            throw;
+        }
+    }
+
+    private async Task CommitAsync(
+        Account account,
+        Ruleset ruleset,
+        IReadOnlyList<ClassifiedRulesetTransaction> classifiedRows,
+        IReadOnlyList<RulesetImportPreviewRowDto> preview,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = _db.BeginMultiTransaction();
+        transaction.Open();
+
+        try
+        {
+            var existingUniqueIds = await _deduplication.LoadExistingUniqueIdsAsync(account.Id, transaction, cancellationToken);
+            var acceptedPreviewByRow = preview.Where(row => row.Accepted).ToDictionary(row => row.RowNumber);
+            var now = DateTimeOffset.UtcNow;
+
+            foreach (var classified in classifiedRows)
+            {
+                if (!acceptedPreviewByRow.ContainsKey(classified.Mapped.RowNumber)
+                    || string.IsNullOrWhiteSpace(classified.Mapped.UniqueId)
+                    || existingUniqueIds.Contains(classified.Mapped.UniqueId)
+                    || classified.Mapped.Date is null
+                    || classified.Mapped.Amount is null
+                    || string.IsNullOrWhiteSpace(classified.Mapped.Type)
+                    || string.IsNullOrWhiteSpace(classified.Mapped.Description))
+                {
+                    continue;
+                }
+
+                var entity = new FinancialTransaction
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = _currentUser.UserId,
+                    AccountId = account.Id,
+                    Date = classified.Mapped.Date.Value,
+                    Description = classified.Mapped.Description,
+                    Merchant = classified.Merchant,
+                    Type = classified.Mapped.Type,
+                    Classification = classified.Classification,
+                    Category = classified.Category,
+                    Subcategory = classified.Subcategory,
+                    Amount = classified.Mapped.Amount.Value,
+                    Currency = account.Currency,
+                    Direction = DirectionForType(classified.Mapped.Type),
+                    Status = "posted",
+                    Source = "import",
+                    ImportHash = BuildHash(account.Id, classified.Mapped.UniqueId),
+                    UniqueId = classified.Mapped.UniqueId,
+                    RulesetId = ruleset.Id,
+                    RulesetVersion = ruleset.Version,
+                    MatchedClassificationRuleId = classified.MatchedRuleIds.FirstOrDefault(),
+                    Tags = RulesetJson.Write(classified.Tags),
+                    RawRow = RulesetJson.Write(classified.Mapped.RawRow),
+                    IsVoid = false,
+                    IsSplit = false,
+                    Metadata = RulesetJson.Write(new { rulesetId = ruleset.Id, rulesetVersion = ruleset.Version }),
+                    CreatedAt = now,
+                    UpdatedAt = now
+                };
+
+                await transaction.Save(entity);
+                existingUniqueIds.Add(classified.Mapped.UniqueId);
+            }
+
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    private static IReadOnlyList<RulesetImportPreviewRowDto> BuildPreview(
+        IReadOnlyList<ClassifiedRulesetTransaction> rows,
+        HashSet<string> existingUniqueIds,
+        HashSet<string> seenUniqueIds)
+    {
+        var preview = new List<RulesetImportPreviewRowDto>();
+        foreach (var row in rows)
+        {
+            var errors = row.Mapped.Errors.ToList();
+            var duplicate = false;
+            if (!string.IsNullOrWhiteSpace(row.Mapped.UniqueId))
+            {
+                duplicate = existingUniqueIds.Contains(row.Mapped.UniqueId) || !seenUniqueIds.Add(row.Mapped.UniqueId);
+            }
+
+            if (!FinanceValues.Classifications.Contains(row.Classification))
+            {
+                errors.Add(new ImportJobErrorDto(row.Mapped.RowNumber, "classification", "Classification is invalid."));
+            }
+
+            preview.Add(new RulesetImportPreviewRowDto(
+                row.Mapped.RowNumber,
+                row.Mapped.RawRow,
+                row.Mapped.Date,
+                row.Mapped.Amount,
+                row.Mapped.Type,
+                row.Mapped.Description,
+                row.Merchant,
+                row.Category,
+                row.Subcategory,
+                row.Classification,
+                row.Tags,
+                row.Mapped.UniqueId,
+                duplicate,
+                errors.Count == 0 && !duplicate,
+                row.MatchedRuleIds,
+                errors));
+        }
+
+        return preview;
+    }
+
+    private static ImportJobDto ToDto(ImportJob job)
+    {
+        return new ImportJobDto(
+            job.Id,
+            job.AccountId,
+            job.RulesetId,
+            job.RulesetVersion,
+            job.FileName,
+            job.Status,
+            job.TotalRows,
+            job.SuccessRows,
+            job.SkippedRows,
+            job.ErrorRows,
+            RulesetJson.Read<IReadOnlyList<ImportJobErrorDto>>(job.Errors, []),
+            job.IsDryRun,
+            job.StartedAt,
+            job.CompletedAt);
+    }
+
+    private static string DirectionForType(string type)
+    {
+        return type switch
+        {
+            "income" or "opening_balance" => "inflow",
+            "expense" => "outflow",
+            _ => "neutral"
+        };
+    }
+
+    private static string BuildHash(Guid accountId, string uniqueId)
+    {
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{accountId:N}|{uniqueId}"))).ToLowerInvariant();
+    }
+}

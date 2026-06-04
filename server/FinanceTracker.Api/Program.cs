@@ -26,7 +26,13 @@ builder.Services.AddHttpClient();
 builder.Services.AddSingleton<NpgsqlConnectionFactory>();
 builder.Services.AddFinanceOrmMapper(databaseOptions.ConnectionString);
 builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
-builder.Services.AddScoped<IObjectStorageService, S3CompatibleObjectStorageService>();
+builder.Services.AddScoped<IObjectStorageService>(services =>
+{
+    var options = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<ObjectStorageOptions>>().Value;
+    return string.Equals(options.Provider, "S3", StringComparison.OrdinalIgnoreCase)
+        ? ActivatorUtilities.CreateInstance<S3CompatibleObjectStorageService>(services)
+        : ActivatorUtilities.CreateInstance<LocalObjectStorageService>(services);
+});
 builder.Services.AddScoped<HealthDiagnosticService>();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<TransactionService>();
@@ -34,6 +40,12 @@ builder.Services.AddScoped<TransferService>();
 builder.Services.AddScoped<ImportService>();
 builder.Services.AddScoped<ImportRuleService>();
 builder.Services.AddScoped<ClassificationRuleService>();
+builder.Services.AddScoped<RulesetService>();
+builder.Services.AddScoped<CsvParserService>();
+builder.Services.AddScoped<MappingEngine>();
+builder.Services.AddScoped<RulesetClassificationEngine>();
+builder.Services.AddScoped<DeduplicationService>();
+builder.Services.AddScoped<ImportOrchestrator>();
 builder.Services.AddScoped<StorageFileService>();
 builder.Services.AddScoped<ReportService>();
 builder.Services.AddScoped<GuidanceService>();
