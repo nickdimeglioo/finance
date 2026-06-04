@@ -133,12 +133,7 @@ public sealed class RulesetService
         }
 
         var rules = Normalize(request.Rules);
-        if (rules.Rules is null || rules.Rules.Count == 0)
-        {
-            throw new ArgumentException("At least one ruleset rule is required.");
-        }
-
-        foreach (var rule in rules.Rules)
+        foreach (var rule in rules.Rules ?? [])
         {
             if (string.IsNullOrWhiteSpace(rule.Id))
             {

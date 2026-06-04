@@ -195,8 +195,68 @@ textarea {
 
 .row-actions {
   display: inline-flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.back-link,
+.table-resource-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--pm-accent);
+  text-decoration: none;
+  font-weight: 650;
+}
+
+.back-link {
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+}
+
+.table-resource-link:hover,
+.back-link:hover {
+  text-decoration: underline;
+}
+
+.preview-toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(160px, 220px) minmax(130px, 180px);
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  color: var(--pm-muted);
+  font-size: 0.85rem;
+}
+
+.table-input {
+  width: 130px;
+  min-height: 30px;
+  box-sizing: border-box;
+  padding: 0 7px;
+  font-size: 0.82rem;
+}
+
+.table-input.date-input {
+  width: 130px;
+}
+
+.table-input.description-input {
+  width: 230px;
+}
+
+.table-input.amount-input {
+  width: 110px;
+  text-align: right;
 }
 
 .tag-list {
@@ -593,7 +653,13 @@ th {
   }
 
   .inline-actions,
-  .rule-import-bar {
+  .rule-import-bar,
+  .preview-toolbar {
     grid-template-columns: 1fr;
+  }
+
+  .pagination-bar {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

@@ -3,6 +3,7 @@ import { BarChart3, FileArchive, FileUp, Home, Landmark, Repeat, Settings, Walle
 import { AccountsPage } from './pages/AccountsPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ImportsPage } from './pages/ImportsPage';
+import { RulesetPage } from './pages/RulesetPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { StoragePage } from './pages/StoragePage';
@@ -45,6 +46,7 @@ function App() {
           <Route path="/accounts/:id" element={<AccountsPage />} />
           <Route path="/transactions" element={<TransactionsPage />} />
           <Route path="/imports" element={<ImportsPage />} />
+          <Route path="/imports/rulesets/:rulesetId" element={<RulesetPage />} />
           <Route path="/storage" element={<StoragePage />} />
           <Route path="/subscriptions" element={<SubscriptionsPage />} />
           <Route path="/reports" element={<ReportsPage />} />

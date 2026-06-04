@@ -11,8 +11,6 @@ namespace FinanceTracker.Api.Services;
 
 public sealed class ImportOrchestrator
 {
-    private const int PreviewRowLimit = 20;
-
     private readonly ICurrentUserContext _currentUser;
     private readonly IOrmMapperService _db;
     private readonly RulesetService _rulesets;
@@ -92,9 +90,20 @@ public sealed class ImportOrchestrator
             var parsed = await _parser.ParseAsync(file, ruleset, cancellationToken);
             var mappedRows = _mapping.Map(parsed, ruleset);
             var classifiedRows = mappedRows.Select(row => _classification.Classify(row, ruleset)).ToList();
+            if (!isDryRun && request.RowOverrides is not null)
+            {
+                classifiedRows = ApplyOverrides(classifiedRows, request.RowOverrides);
+            }
             var existingUniqueIds = await _deduplication.LoadExistingUniqueIdsAsync(account.Id, transaction: null, cancellationToken);
             var seenUniqueIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var preview = BuildPreview(classifiedRows, existingUniqueIds, seenUniqueIds);
+            if (!isDryRun && request.AcceptedRowNumbers is not null)
+            {
+                var acceptedRows = request.AcceptedRowNumbers.ToHashSet();
+                preview = preview
+                    .Select(row => row with { Accepted = row.Accepted && acceptedRows.Contains(row.RowNumber) })
+                    .ToList();
+            }
 
             if (!isDryRun)
             {
@@ -112,7 +121,7 @@ public sealed class ImportOrchestrator
             job.UpdatedAt = job.CompletedAt.Value;
             await _db.SaveAsync(job, auditUserId: _currentUser.UserId.ToString());
 
-            return new RulesetImportResult(ToDto(job), preview.Take(PreviewRowLimit).ToList());
+            return new RulesetImportResult(ToDto(job), preview);
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or FormatException)
         {
@@ -238,6 +247,97 @@ public sealed class ImportOrchestrator
         }
 
         return preview;
+    }
+
+    private static List<ClassifiedRulesetTransaction> ApplyOverrides(
+        IReadOnlyList<ClassifiedRulesetTransaction> rows,
+        IReadOnlyList<RulesetImportRowOverrideDto> overrides)
+    {
+        var overridesByRow = overrides
+            .GroupBy(item => item.RowNumber)
+            .ToDictionary(group => group.Key, group => group.Last());
+
+        return rows.Select(row =>
+        {
+            if (!overridesByRow.TryGetValue(row.Mapped.RowNumber, out var item))
+            {
+                return row;
+            }
+
+            var type = NormalizeValue(item.Type)?.ToLowerInvariant();
+            var description = NormalizeValue(item.Description);
+            var classification = NormalizeValue(item.Classification)?.ToLowerInvariant() ?? "unknown";
+            decimal? amount = item.Amount is null ? null : Math.Abs(item.Amount.Value);
+            var uniqueId = row.Mapped.UniqueId;
+            if (string.IsNullOrWhiteSpace(uniqueId) && item.Date.HasValue && amount > 0 && !string.IsNullOrWhiteSpace(description))
+            {
+                uniqueId = $"{item.Date.Value:yyyy-MM-dd}|{amount.Value:0.0000}|{description.Trim().ToUpperInvariant()}";
+            }
+            var errors = row.Mapped.Errors
+                .Where(error => error.Column is not ("date" or "amount" or "type" or "description" or "classification"))
+                .ToList();
+
+            if (item.Date is null)
+            {
+                errors.Add(new ImportJobErrorDto(item.RowNumber, "date", "Date is required."));
+            }
+            if (amount is null || amount <= 0)
+            {
+                errors.Add(new ImportJobErrorDto(item.RowNumber, "amount", "Amount must be greater than zero."));
+            }
+            if (string.IsNullOrWhiteSpace(type) || !FinanceValues.TransactionTypes.Contains(type))
+            {
+                errors.Add(new ImportJobErrorDto(item.RowNumber, "type", "Transaction type is invalid."));
+            }
+            if (string.IsNullOrWhiteSpace(description))
+            {
+                errors.Add(new ImportJobErrorDto(item.RowNumber, "description", "Description is required."));
+            }
+            if (!FinanceValues.Classifications.Contains(classification))
+            {
+                errors.Add(new ImportJobErrorDto(item.RowNumber, "classification", "Classification is invalid."));
+            }
+
+            var mapped = row.Mapped with
+            {
+                Date = item.Date,
+                Amount = amount,
+                Type = type,
+                Description = description,
+                Merchant = NormalizeValue(item.Merchant),
+                Category = NormalizeValue(item.Category),
+                Subcategory = NormalizeValue(item.Subcategory),
+                Classification = classification,
+                Tags = NormalizeTags(item.Tags),
+                UniqueId = uniqueId,
+                Errors = errors
+            };
+
+            return row with
+            {
+                Mapped = mapped,
+                Merchant = mapped.Merchant,
+                Category = mapped.Category,
+                Subcategory = mapped.Subcategory,
+                Classification = classification,
+                Tags = mapped.Tags
+            };
+        }).ToList();
+    }
+
+    private static string? NormalizeValue(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static IReadOnlyList<string> NormalizeTags(IReadOnlyList<string>? tags)
+    {
+        return (tags ?? [])
+            .Select(NormalizeValue)
+            .OfType<string>()
+            .Select(tag => tag.ToLowerInvariant())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     private static ImportJobDto ToDto(ImportJob job)

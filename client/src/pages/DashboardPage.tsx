@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Checkbox, EmptyState, Table, type TableColumn } from '../components/ui';
+import { Button, Checkbox, EmptyState, Input, Table, type TableColumn } from '../components/ui';
 import { displayEnum } from '../lib/display';
 import { formatDate, formatMoney, monthRange } from '../lib/financeFormat';
 import { useAccounts } from '../services/accountsService';
@@ -10,7 +10,9 @@ export function DashboardPage() {
   const currentMonth = monthRange();
   const { accounts } = useAccounts();
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
-  const { summary, loading, error } = useDashboardSummary(currentMonth.from, currentMonth.to, selectedAccountIds);
+  const [from, setFrom] = useState(currentMonth.from);
+  const [to, setTo] = useState(currentMonth.to);
+  const { summary, loading, error } = useDashboardSummary(from, to, selectedAccountIds);
   const columns: TableColumn<TransactionListItemDto>[] = [
     { key: 'date', label: 'Date', render: (transaction) => formatDate(transaction.date) },
     { key: 'description', label: 'Description' },
@@ -29,13 +31,23 @@ export function DashboardPage() {
         <div>
           <h1 className="page-title">Dashboard</h1>
           <p className="page-subtitle">
-            Current period: {currentMonth.from} to {currentMonth.to}
+            Current period: {from} to {to}. Committed imports update totals when their transaction dates fall inside this range.
           </p>
         </div>
       </header>
 
       {error && <div className="notice error">{error.message}</div>}
       {loading && <div className="panel">Loading dashboard...</div>}
+
+      <div className="panel form-grid">
+        <Input label="From" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
+        <Input label="To" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
+        <Button type="button" variant="secondary" onClick={() => {
+          const range = monthRange();
+          setFrom(range.from);
+          setTo(range.to);
+        }}>Current Month</Button>
+      </div>
 
       <div className="panel account-selector">
         <div className="panel-header">

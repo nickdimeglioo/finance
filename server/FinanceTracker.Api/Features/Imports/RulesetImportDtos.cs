@@ -5,7 +5,21 @@ namespace FinanceTracker.Api.Features.Imports;
 public sealed record RulesetImportRequest(
     Guid AccountId,
     Guid RulesetId,
-    string? DeduplicationStrategy);
+    string? DeduplicationStrategy,
+    IReadOnlyList<int>? AcceptedRowNumbers = null,
+    IReadOnlyList<RulesetImportRowOverrideDto>? RowOverrides = null);
+
+public sealed record RulesetImportRowOverrideDto(
+    int RowNumber,
+    DateOnly? Date,
+    decimal? Amount,
+    string? Type,
+    string? Description,
+    string? Merchant,
+    string? Category,
+    string? Subcategory,
+    string? Classification,
+    IReadOnlyList<string>? Tags);
 
 public sealed record RulesetImportResult(
     ImportJobDto Job,

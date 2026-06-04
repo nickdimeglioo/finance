@@ -478,3 +478,21 @@ export interface RulesetImportResult {
   job: ImportJobDto;
   previewRows: RulesetImportPreviewRowDto[];
 }
+
+export interface RulesetImportRowOverride {
+  rowNumber: number;
+  date?: string | null;
+  amount?: number | null;
+  type?: TransactionType | null;
+  description?: string | null;
+  merchant?: string | null;
+  category?: string | null;
+  subcategory?: string | null;
+  classification?: TransactionClassification | null;
+  tags?: string[] | null;
+}
+
+export interface RulesetImportCommitOptions {
+  acceptedRowNumbers: number[];
+  rowOverrides: RulesetImportRowOverride[];
+}

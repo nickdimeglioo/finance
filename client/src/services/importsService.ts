@@ -10,6 +10,7 @@ import type {
   ParsedImportDto,
   PreviewImportRequest,
   RulesetDto,
+  RulesetImportCommitOptions,
   RulesetImportResult,
   TestClassificationRuleResult,
   TestImportRuleResult,
@@ -171,19 +172,36 @@ export function previewRulesetImport(accountId: string, rulesetId: string, file:
   return runRulesetImportRequest('/import/preview', accountId, rulesetId, file, deduplicationStrategy);
 }
 
-export function runRulesetImport(accountId: string, rulesetId: string, file: File, deduplicationStrategy = 'skip'): Promise<RulesetImportResult> {
-  return runRulesetImportRequest('/import/run', accountId, rulesetId, file, deduplicationStrategy);
+export function runRulesetImport(
+  accountId: string,
+  rulesetId: string,
+  file: File,
+  options: RulesetImportCommitOptions,
+  deduplicationStrategy = 'skip',
+): Promise<RulesetImportResult> {
+  return runRulesetImportRequest('/import/run', accountId, rulesetId, file, deduplicationStrategy, options);
 }
 
 export function getImportJob(jobId: string): Promise<ImportJobDto> {
   return apiRequest<ImportJobDto>(`/import/jobs/${jobId}`);
 }
 
-function runRulesetImportRequest(path: string, accountId: string, rulesetId: string, file: File, deduplicationStrategy: string): Promise<RulesetImportResult> {
+function runRulesetImportRequest(
+  path: string,
+  accountId: string,
+  rulesetId: string,
+  file: File,
+  deduplicationStrategy: string,
+  options?: RulesetImportCommitOptions,
+): Promise<RulesetImportResult> {
   const form = new FormData();
   form.set('accountId', accountId);
   form.set('rulesetId', rulesetId);
   form.set('deduplicationStrategy', deduplicationStrategy);
+  if (options) {
+    form.set('acceptedRowNumbers', JSON.stringify(options.acceptedRowNumbers));
+    form.set('rowOverrides', JSON.stringify(options.rowOverrides));
+  }
   form.set('file', file);
   return apiRequest<RulesetImportResult>(path, {
     method: 'POST',
