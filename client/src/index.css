@@ -70,6 +70,19 @@ textarea {
   text-decoration: none;
 }
 
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  border-radius: 999px;
+  padding: 2px 6px;
+  color: white;
+  background: var(--pm-danger);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
 .nav-item.active,
 .nav-item:hover {
   background: var(--pm-accent-soft);
@@ -171,12 +184,66 @@ textarea {
   margin-bottom: 12px;
 }
 
+.tag-editor {
+  grid-template-columns: minmax(220px, 1fr) 100px auto auto;
+}
+
+.color-swatch {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--pm-border-strong);
+  border-radius: 999px;
+}
+
+.field-span {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 8px;
+}
+
+.organize-actions {
+  justify-content: flex-start;
+  margin-top: 14px;
+}
+
+.match-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.match-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--pm-border);
+  border-radius: var(--pm-radius);
+  padding: 10px;
+  background: white;
+}
+
 .rule-import-bar {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) auto auto;
   gap: 10px;
   align-items: end;
   margin-bottom: 12px;
+}
+
+.rule-json-editor {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.rule-json-editor textarea {
+  min-height: 280px;
+  padding: 10px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  line-height: 1.45;
+  resize: vertical;
 }
 
 .selector-grid {

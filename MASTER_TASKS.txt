@@ -33,7 +33,6 @@ FT-0208 - Create money and date utilities
 Open follow-up tasks introduced in pass 2
 ----------------------------------------
 FT-P2-0001 - Swap development auth bridge for reusable auth
-FT-P2-0003 - Run Liquibase against local database
 
 Pass 3
 ------
@@ -52,7 +51,6 @@ FT-P3-0004 - Add transaction direction support
 
 Open follow-up tasks introduced in pass 3
 ----------------------------------------
-FT-P3-0005 - Run Liquibase against local database
 FT-P3-0006 - Resolve locked Debug build outputs
 
 Pass 4
@@ -124,3 +122,15 @@ FT-P9-0001 - Complete ruleset prompt contract, done in pass 9 import workflow
 FT-P9-0002 - Add full editable import preview and commit overrides, done in pass 9 import workflow
 FT-P9-0003 - Clarify dashboard import totals period, done in pass 9 import workflow
 FT-P9-0004 - Allow empty rulesets, done in pass 9 import workflow
+
+Pass 10 Phase 5
+---------------
+FT-0501 - Create tags recurring notes schema, done in pass 10 Phase 5
+FT-0502 - Build tags system, done in pass 10 Phase 5
+FT-0503 - Build recurring rules API, done in pass 10 Phase 5
+FT-0504 - Build subscriptions UI, done in pass 10 Phase 5
+FT-0505 - Build notes system, done in pass 10 Phase 5
+FT-0506 - Build reminders infrastructure, done in pass 10 Phase 5
+FT-P10-0001 - Edit existing ruleset rules, done in pass 10 Phase 5
+FT-P10-0002 - Fix Liquibase PostgreSQL block parsing, done in pass 10 Phase 5
+FT-P3-0005 - Run Liquibase against local database, done in pass 10 Phase 5

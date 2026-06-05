@@ -157,6 +157,123 @@ export interface DashboardSummaryDto {
   totalLiquidBalance: number;
   recentTransactions: TransactionListItemDto[];
   pendingReminderCount: number;
+  pendingReminders: ReminderDto[];
+}
+
+export interface TagDto {
+  id: string;
+  name: string;
+  color?: string | null;
+  transactionCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertTagRequest {
+  name: string;
+  color?: string | null;
+}
+
+export type RecurringFrequency = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly';
+
+export interface RecurringRuleDto {
+  id: string;
+  name: string;
+  accountId?: string | null;
+  type: string;
+  classification: TransactionClassification;
+  amount: number;
+  currency: string;
+  category?: string | null;
+  merchantKeyword?: string | null;
+  frequency: RecurringFrequency;
+  nextExpected: string;
+  lastMatchedDate?: string | null;
+  amountTolerance: number;
+  tags: string[];
+  isActive: boolean;
+  status: 'overdue' | 'upcoming' | 'on_track';
+  monthlyNormalizedCost: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertRecurringRuleRequest {
+  name: string;
+  accountId?: string | null;
+  type: string;
+  classification: TransactionClassification;
+  amount: number;
+  currency: string;
+  category?: string | null;
+  merchantKeyword?: string | null;
+  frequency: RecurringFrequency;
+  nextExpected: string;
+  amountTolerance: number;
+  tags?: string[] | null;
+  isActive: boolean;
+}
+
+export interface SubscriptionStatusDto {
+  monthlyTotal: number;
+  businessMonthlyTotal: number;
+  personalMonthlyTotal: number;
+  rules: RecurringRuleDto[];
+}
+
+export interface RecurringRuleSuggestionDto {
+  accountId: string;
+  name: string;
+  type: string;
+  classification: TransactionClassification;
+  amount: number;
+  currency: string;
+  category?: string | null;
+  merchantKeyword: string;
+  frequency: RecurringFrequency;
+  nextExpected: string;
+  occurrences: number;
+}
+
+export interface NoteDto {
+  id: string;
+  title: string;
+  body?: string | null;
+  amountHint?: number | null;
+  merchantHint?: string | null;
+  dateHint?: string | null;
+  matchedTransactionId?: string | null;
+  status: 'unmatched' | 'matched' | 'dismissed';
+  remindOn?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertNoteRequest {
+  title: string;
+  body?: string | null;
+  amountHint?: number | null;
+  merchantHint?: string | null;
+  dateHint?: string | null;
+  remindOn?: string | null;
+}
+
+export interface NoteMatchSuggestionDto {
+  note: NoteDto;
+  score: number;
+  reasons: string[];
+}
+
+export interface ReminderDto {
+  id: string;
+  type: 'note' | 'recurring_rule' | 'reconciliation' | 'custom';
+  sourceId?: string | null;
+  title: string;
+  message?: string | null;
+  dueOn: string;
+  status: 'pending' | 'dismissed' | 'completed';
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type ImportStatus = 'uploaded' | 'parsed' | 'previewed' | 'committed' | 'failed' | 'cancelled';

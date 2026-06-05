@@ -11,3 +11,5 @@ databaseChangeLog:
       file: changelog/004-phase-4-cleanup-storage-rulesets.sql
   - include:
       file: changelog/005-ruleset-rebuild.sql
+  - include:
+      file: changelog/006-phase-5-organization.sql

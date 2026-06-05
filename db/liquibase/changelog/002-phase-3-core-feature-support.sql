@@ -1,6 +1,6 @@
 --liquibase formatted sql
 
---changeset finance:002-transaction-direction-and-user-fks
+--changeset finance:002-transaction-direction-and-user-fks splitStatements:false
 ALTER TABLE transactions
     ADD COLUMN IF NOT EXISTS direction varchar(20);
 
@@ -50,4 +50,3 @@ CREATE INDEX IF NOT EXISTS ix_transactions_user_type_date ON transactions (user_
 CREATE INDEX IF NOT EXISTS ix_transactions_user_direction_date ON transactions (user_id, direction, date);
 CREATE INDEX IF NOT EXISTS ix_transactions_user_non_voided_date ON transactions (user_id, date) WHERE is_void = false;
 CREATE INDEX IF NOT EXISTS ix_transactions_transfer_partner ON transactions (transfer_partner_id);
-

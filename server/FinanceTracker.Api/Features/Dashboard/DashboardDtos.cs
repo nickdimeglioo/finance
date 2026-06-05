@@ -1,4 +1,5 @@
 using FinanceTracker.Api.Features.Transactions;
+using FinanceTracker.Api.Features.Organization;
 
 namespace FinanceTracker.Api.Features.Dashboard;
 
@@ -10,5 +11,5 @@ public sealed record DashboardSummaryDto(
     decimal NetCashFlow,
     decimal TotalLiquidBalance,
     IReadOnlyList<TransactionListItemDto> RecentTransactions,
-    int PendingReminderCount);
-
+    int PendingReminderCount,
+    IReadOnlyList<ReminderDto> PendingReminders);

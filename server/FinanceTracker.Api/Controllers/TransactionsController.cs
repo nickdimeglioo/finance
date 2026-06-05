@@ -1,5 +1,6 @@
 using FinanceTracker.Api.Features.Shared;
 using FinanceTracker.Api.Features.Transactions;
+using FinanceTracker.Api.Features.Organization;
 using FinanceTracker.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -92,6 +93,24 @@ public sealed class TransactionsController : ControllerBase
         {
             var transaction = await _transactionService.UpdateStatusAsync(id, request.Status, cancellationToken);
             return transaction is null ? NotFound() : Ok(transaction);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPut("{id:guid}/tags")]
+    public async Task<ActionResult<IReadOnlyList<string>>> ReplaceTags(
+        Guid id,
+        ReplaceTransactionTagsRequest request,
+        [FromServices] TagService tags,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var names = await tags.ReplaceTransactionTagsAsync(id, request.TagIds, cancellationToken);
+            return names is null ? NotFound() : Ok(names);
         }
         catch (ArgumentException ex)
         {

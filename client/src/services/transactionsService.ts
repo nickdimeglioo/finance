@@ -63,6 +63,13 @@ export function updateTransactionStatus(id: string, status: string): Promise<Tra
   });
 }
 
+export function replaceTransactionTags(id: string, tagIds: string[]): Promise<string[]> {
+  return apiRequest<string[]>(`/transactions/${id}/tags`, {
+    method: 'PUT',
+    body: JSON.stringify({ tagIds }),
+  });
+}
+
 export function useTransactions(filters: TransactionFiltersRequest = {}) {
   const stableFilters = useMemo(() => JSON.stringify(filters), [filters]);
   const [result, setResult] = useState<PagedResult<TransactionListItemDto>>({
@@ -102,4 +109,3 @@ export function useTransactions(filters: TransactionFiltersRequest = {}) {
 
   return { result, loading, error, reload: () => listTransactions(JSON.parse(stableFilters) as TransactionFiltersRequest).then(setResult) };
 }
-

@@ -18,6 +18,8 @@ public sealed class ImportOrchestrator
     private readonly MappingEngine _mapping;
     private readonly RulesetClassificationEngine _classification;
     private readonly DeduplicationService _deduplication;
+    private readonly RecurringRuleService _recurringRules;
+    private readonly ILogger<ImportOrchestrator> _logger;
 
     public ImportOrchestrator(
         ICurrentUserContext currentUser,
@@ -26,7 +28,9 @@ public sealed class ImportOrchestrator
         CsvParserService parser,
         MappingEngine mapping,
         RulesetClassificationEngine classification,
-        DeduplicationService deduplication)
+        DeduplicationService deduplication,
+        RecurringRuleService recurringRules,
+        ILogger<ImportOrchestrator> logger)
     {
         _currentUser = currentUser;
         _db = db;
@@ -35,6 +39,8 @@ public sealed class ImportOrchestrator
         _mapping = mapping;
         _classification = classification;
         _deduplication = deduplication;
+        _recurringRules = recurringRules;
+        _logger = logger;
     }
 
     public async Task<RulesetImportResult> PreviewAsync(RulesetImportRequest request, IFormFile file, CancellationToken cancellationToken)
@@ -108,6 +114,14 @@ public sealed class ImportOrchestrator
             if (!isDryRun)
             {
                 await CommitAsync(account, ruleset, classifiedRows, preview, cancellationToken);
+                try
+                {
+                    await _recurringRules.MatchTransactionsAsync(cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Import {ImportJobId} committed, but recurring matching failed.", job.Id);
+                }
             }
 
             var allErrors = parsed.Errors.Concat(preview.SelectMany(row => row.Errors)).ToList();

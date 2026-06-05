@@ -1,10 +1,11 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, ClipboardList, Download, Plus, Save, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, ClipboardList, Download, Pencil, Plus, Save, Trash2, Upload, X } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Button, Checkbox, EmptyState, Input, Select, StatusBadge, Table, type TableColumn } from '../components/ui';
 import { displayEnum } from '../lib/display';
 import { buildRulesetPrompt } from '../lib/rulesetPrompt';
 import { useAccounts } from '../services/accountsService';
+import { createRecurringRule, listRecurringRuleSuggestions } from '../services/organizationService';
 import {
   deleteRuleset,
   exportRuleset,
@@ -21,6 +22,7 @@ import type {
   RulesetImportResult,
   RulesetRuleDefinitionDto,
   RulesetRuleOutputDto,
+  RecurringRuleSuggestionDto,
   TransactionClassification,
 } from '../types/schema';
 
@@ -91,6 +93,9 @@ export function RulesetPage() {
   const [busy, setBusy] = useState(false);
   const [ruleForm, setRuleForm] = useState<RuleForm>(emptyRuleForm);
   const [draftRules, setDraftRules] = useState<RulesetRuleDefinitionDto[]>([]);
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+  const [editingRuleJson, setEditingRuleJson] = useState('');
+  const [recurringSuggestions, setRecurringSuggestions] = useState<RecurringRuleSuggestionDto[]>([]);
 
   useEffect(() => {
     reloadRuleset();
@@ -173,6 +178,25 @@ export function RulesetPage() {
     await saveRules(rules.filter((rule) => rule.id !== ruleId));
   }
 
+  async function saveEditedRule(event: FormEvent) {
+    event.preventDefault();
+    if (!editingRuleId) {
+      return;
+    }
+
+    try {
+      const edited = JSON.parse(editingRuleJson) as RulesetRuleDefinitionDto;
+      if (!isRuleDefinition(edited)) {
+        throw new Error('Rule JSON must include string id and kind values.');
+      }
+      await saveRules(rules.map((rule) => rule.id === editingRuleId ? edited : rule), 'Rule updated.');
+      setEditingRuleId(null);
+      setEditingRuleJson('');
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Unable to parse rule JSON.');
+    }
+  }
+
   async function runPreview(commit: boolean) {
     if (!accountId || !ruleset || !file) {
       setMessage('Choose an account and CSV file.');
@@ -193,6 +217,14 @@ export function RulesetPage() {
       setMessage(commit
         ? `${result.job.successRows} rows committed. Dashboard totals include committed rows inside the dashboard date range.`
         : null);
+      if (commit) {
+        try {
+          setRecurringSuggestions(await listRecurringRuleSuggestions());
+        } catch {
+          setRecurringSuggestions([]);
+          setMessage(`${result.job.successRows} rows committed. Recurring suggestions could not be loaded.`);
+        }
+      }
     } catch (err) {
       setMessage(err instanceof Error ? err.message : commit ? 'Unable to commit import.' : 'Unable to preview import.');
     } finally {
@@ -347,7 +379,13 @@ export function RulesetPage() {
       label: '',
       align: 'right',
       render: (rule) => (
-        <Button type="button" variant="destructive" size="sm" leftIcon={<Trash2 size={14} />} onClick={() => removeRule(rule.id)}>Delete</Button>
+        <div className="row-actions">
+          <Button type="button" variant="secondary" size="sm" leftIcon={<Pencil size={14} />} onClick={() => {
+            setEditingRuleId(rule.id);
+            setEditingRuleJson(JSON.stringify(rule, null, 2));
+          }}>Edit</Button>
+          <Button type="button" variant="destructive" size="sm" leftIcon={<Trash2 size={14} />} onClick={() => removeRule(rule.id)}>Delete</Button>
+        </div>
       ),
     },
   ];
@@ -387,6 +425,34 @@ export function RulesetPage() {
       </header>
 
       {message && <div className="notice">{message}</div>}
+
+      {recurringSuggestions.length > 0 && <div className="panel">
+        <div className="panel-header"><h2>Recurring Transaction Suggestions</h2><span>{recurringSuggestions.length}</span></div>
+        <p className="muted">These suggestions have at least three similar transactions at a regular interval.</p>
+        <div className="match-list">
+          {recurringSuggestions.map((suggestion) => <div className="match-card" key={`${suggestion.accountId}-${suggestion.merchantKeyword}-${suggestion.amount}`}>
+            <div><strong>{suggestion.name}</strong><div className="muted">{suggestion.occurrences} occurrences · {displayEnum(suggestion.frequency)} · {suggestion.amount.toFixed(2)} {suggestion.currency} · next {suggestion.nextExpected}</div></div>
+            <Button type="button" size="sm" onClick={async () => {
+              await createRecurringRule({
+                name: suggestion.name,
+                accountId: suggestion.accountId,
+                type: suggestion.type,
+                classification: suggestion.classification,
+                amount: suggestion.amount,
+                currency: suggestion.currency,
+                category: suggestion.category,
+                merchantKeyword: suggestion.merchantKeyword,
+                frequency: suggestion.frequency,
+                nextExpected: suggestion.nextExpected,
+                amountTolerance: 0.2,
+                tags: [],
+                isActive: true,
+              });
+              setRecurringSuggestions((current) => current.filter((item) => item !== suggestion));
+            }}>Create Rule</Button>
+          </div>)}
+        </div>
+      </div>}
 
       <form className="panel form-grid" onSubmit={(event) => {
         event.preventDefault();
@@ -529,6 +595,22 @@ export function RulesetPage() {
         </form>
 
         <Table data={rules} columns={ruleColumns} rowKey={(rule) => rule.id} emptyMessage="No rules in this ruleset." />
+
+        {editingRuleId && (
+          <form className="rule-json-editor" onSubmit={saveEditedRule}>
+            <label className="pm-field">
+              <span className="pm-label">Edit Rule JSON</span>
+              <textarea value={editingRuleJson} onChange={(event) => setEditingRuleJson(event.target.value)} rows={18} />
+            </label>
+            <div className="row-actions">
+              <Button type="button" variant="secondary" leftIcon={<X size={15} />} onClick={() => {
+                setEditingRuleId(null);
+                setEditingRuleJson('');
+              }}>Cancel</Button>
+              <Button type="submit" leftIcon={<Save size={15} />} loading={busy}>Save Rule</Button>
+            </div>
+          </form>
+        )}
       </div>
     </section>
   );

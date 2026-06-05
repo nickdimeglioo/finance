@@ -1,5 +1,6 @@
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
-import { BarChart3, FileArchive, FileUp, Home, Landmark, Repeat, Settings, WalletCards } from 'lucide-react';
+import { BarChart3, Bell, FileArchive, FileUp, Home, Landmark, NotebookPen, Repeat, Settings, Tags, WalletCards } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { AccountsPage } from './pages/AccountsPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ImportsPage } from './pages/ImportsPage';
@@ -9,6 +10,9 @@ import { SettingsPage } from './pages/SettingsPage';
 import { StoragePage } from './pages/StoragePage';
 import { SubscriptionsPage } from './pages/SubscriptionsPage';
 import { TransactionsPage } from './pages/TransactionsPage';
+import { TagsPage } from './pages/TagsPage';
+import { NotesPage } from './pages/NotesPage';
+import { listReminders } from './services/organizationService';
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: Home },
@@ -17,11 +21,18 @@ const navItems = [
   { to: '/imports', label: 'Imports', icon: FileUp },
   { to: '/storage', label: 'Storage', icon: FileArchive },
   { to: '/subscriptions', label: 'Subscriptions', icon: Repeat },
+  { to: '/tags', label: 'Tags', icon: Tags },
+  { to: '/notes', label: 'Notes', icon: NotebookPen },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
 function App() {
+  const [pendingReminders, setPendingReminders] = useState(0);
+  useEffect(() => {
+    listReminders().then((items) => setPendingReminders(items.length)).catch(() => setPendingReminders(0));
+  }, []);
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -33,6 +44,7 @@ function App() {
               <NavLink key={item.to} to={item.to} className="nav-item">
                 <Icon aria-hidden="true" size={18} />
                 <span>{item.label}</span>
+                {item.to === '/dashboard' && pendingReminders > 0 && <span className="nav-badge"><Bell size={12} />{pendingReminders}</span>}
               </NavLink>
             );
           })}
@@ -49,6 +61,8 @@ function App() {
           <Route path="/imports/rulesets/:rulesetId" element={<RulesetPage />} />
           <Route path="/storage" element={<StoragePage />} />
           <Route path="/subscriptions" element={<SubscriptionsPage />} />
+          <Route path="/tags" element={<TagsPage />} />
+          <Route path="/notes" element={<NotesPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>

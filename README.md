@@ -33,10 +33,22 @@ Reserved for this app so it can run beside the pipeline project:
 The original project task board lives in `task-board.csv` and should stay unchanged unless explicitly requested. Later implementation passes should create pass-specific CSVs, for example `task-board-pass-2.csv`, with headers:
 
 ```csv
-id,title,description,status,priority,effort,scope,phase,created_at,updated_at
+insert_type,id,title,description,status,priority,effort,scope,phase
 ```
 
-Completed items from each flow should include a pass marker in `status`, for example `done - pass 2`. `MASTER_TASKS.txt` is the cross-pass ledger of completed task IDs.
+Use `task-tracker/app.py` to upload mutations. Numeric status `5` means complete. `MASTER_TASKS.txt` is the cross-pass ledger of completed task IDs.
+
+## Phase 5 Organization Features
+
+Phase 5 adds deterministic organization and recurring-transaction workflows:
+
+- Tags: CRUD manager at `/tags`, transaction tag assignment, tag counts, and transaction filtering.
+- Recurring rules and subscriptions: CRUD at `/subscriptions`, amount/date/merchant matching after imports, monthly-normalized cost summaries, and three-occurrence recurring suggestions after ruleset imports.
+- Notes: CRUD at `/notes`, merchant/amount/date scoring, transaction-side match acceptance, dismissal, and optional reminder dates.
+- Reminders: nightly hosted worker, pending reminder API, dashboard actions, and a dashboard nav badge.
+- Rulesets: empty rulesets remain valid and every existing rule can be edited as JSON from its ruleset resource page.
+
+The Phase 5 schema is in `db/liquibase/changelog/006-phase-5-organization.sql`. It creates `tags`, `transaction_tags`, `recurring_rules`, `notes`, and `reminders`.
 
 ## Expected Dev Commands
 
@@ -44,10 +56,16 @@ These commands apply once the app is scaffolded:
 
 ```bash
 cd client && npm run dev -- --host 0.0.0.0 --port 5273
-cd server && dotnet run --urls http://localhost:8353
+cd server && Database__ConnectionString="Host=localhost;Port=5438;Database=finance_tracker;Username=finance;Password=finance-dev-password;Include Error Detail=true" dotnet run --urls http://localhost:8353
 ```
 
 Liquibase commands should be run from `db/liquibase` after `liquibase.properties` is configured for the finance database.
+
+If the local Liquibase executable does not have Java 17+, run it through Docker:
+
+```bash
+docker run --rm --network host -v "$PWD/db/liquibase:/liquibase/workdir" -w /liquibase/workdir liquibase/liquibase:4.31.1 --defaults-file=liquibase.properties update
+```
 
 Local services:
 

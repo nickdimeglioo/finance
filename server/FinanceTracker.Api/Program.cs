@@ -50,6 +50,11 @@ builder.Services.AddScoped<StorageFileService>();
 builder.Services.AddScoped<ReportService>();
 builder.Services.AddScoped<GuidanceService>();
 builder.Services.AddScoped<DashboardService>();
+builder.Services.AddScoped<TagService>();
+builder.Services.AddScoped<RecurringRuleService>();
+builder.Services.AddScoped<NoteService>();
+builder.Services.AddScoped<ReminderService>();
+builder.Services.AddHostedService<ReminderWorker>();
 
 OrmConfiguration.AddType<Enum>(new EnumHandler());
 OrmConfiguration.AddType<Dictionary<string, object>>(new DBSerializer());

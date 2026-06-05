@@ -9,11 +9,13 @@ public sealed class DashboardService
 {
     private readonly ICurrentUserContext _currentUser;
     private readonly IOrmMapperService _db;
+    private readonly ReminderService _reminders;
 
-    public DashboardService(ICurrentUserContext currentUser, IOrmMapperService db)
+    public DashboardService(ICurrentUserContext currentUser, IOrmMapperService db, ReminderService reminders)
     {
         _currentUser = currentUser;
         _db = db;
+        _reminders = reminders;
     }
 
     public async Task<DashboardSummaryDto> GetSummaryAsync(DateOnly? from, DateOnly? to, IReadOnlyCollection<Guid>? accountIds, CancellationToken cancellationToken)
@@ -67,6 +69,7 @@ public sealed class DashboardService
             .Take(10)
             .MapToList<FinancialTransaction, TransactionListItemDto>();
 
+        var reminders = await _reminders.ListAsync(includeResolved: false, cancellationToken);
         return new DashboardSummaryDto(
             rangeFrom,
             rangeTo,
@@ -75,6 +78,7 @@ public sealed class DashboardService
             totalIncome - totalExpenses,
             liquidBalance,
             recent,
-            0);
+            reminders.Count,
+            reminders);
     }
 }

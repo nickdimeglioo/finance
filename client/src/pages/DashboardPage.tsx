@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Button, Checkbox, EmptyState, Input, Table, type TableColumn } from '../components/ui';
 import { displayEnum } from '../lib/display';
 import { formatDate, formatMoney, monthRange } from '../lib/financeFormat';
 import { useAccounts } from '../services/accountsService';
 import { useDashboardSummary } from '../services/dashboardService';
-import type { TransactionListItemDto } from '../types/schema';
+import { completeReminder, dismissReminder } from '../services/organizationService';
+import type { ReminderDto, TransactionListItemDto } from '../types/schema';
 
 export function DashboardPage() {
   const currentMonth = monthRange();
@@ -13,6 +15,7 @@ export function DashboardPage() {
   const [from, setFrom] = useState(currentMonth.from);
   const [to, setTo] = useState(currentMonth.to);
   const { summary, loading, error } = useDashboardSummary(from, to, selectedAccountIds);
+  const [hiddenReminderIds, setHiddenReminderIds] = useState<string[]>([]);
   const columns: TableColumn<TransactionListItemDto>[] = [
     { key: 'date', label: 'Date', render: (transaction) => formatDate(transaction.date) },
     { key: 'description', label: 'Description' },
@@ -23,6 +26,16 @@ export function DashboardPage() {
       align: 'right',
       render: (transaction) => formatMoney(transaction.amount, transaction.currency)
     }
+  ];
+  const reminderColumns: TableColumn<ReminderDto>[] = [
+    { key: 'dueOn', label: 'Due', render: (reminder) => formatDate(reminder.dueOn) },
+    { key: 'title', label: 'Reminder', render: (reminder) => <div><strong>{reminder.title}</strong>{reminder.message && <div className="muted">{reminder.message}</div>}</div> },
+    { key: 'type', label: 'Type', render: (reminder) => displayEnum(reminder.type) },
+    { key: 'actions', label: '', align: 'right', render: (reminder) => <div className="row-actions">
+      <Link className="table-resource-link" to={reminder.type === 'note' ? '/notes' : reminder.type === 'recurring_rule' ? '/subscriptions' : '/dashboard'}>View</Link>
+      <Button type="button" size="sm" onClick={async () => { await completeReminder(reminder.id); setHiddenReminderIds([...hiddenReminderIds, reminder.id]); }}>Complete</Button>
+      <Button type="button" size="sm" variant="secondary" onClick={async () => { await dismissReminder(reminder.id); setHiddenReminderIds([...hiddenReminderIds, reminder.id]); }}>Dismiss</Button>
+    </div> },
   ];
 
   return (
@@ -80,8 +93,17 @@ export function DashboardPage() {
 
       <div className="panel">
         <div className="panel-header">
+          <h2>Pending Reminders</h2>
+          <span>{(summary?.pendingReminders ?? []).filter((item) => !hiddenReminderIds.includes(item.id)).length}</span>
+        </div>
+        {summary && summary.pendingReminders.filter((item) => !hiddenReminderIds.includes(item.id)).length === 0 && <EmptyState title="No pending reminders." />}
+        {summary && summary.pendingReminders.filter((item) => !hiddenReminderIds.includes(item.id)).length > 0 && <Table data={summary.pendingReminders.filter((item) => !hiddenReminderIds.includes(item.id))} columns={reminderColumns} rowKey="id" />}
+      </div>
+
+      <div className="panel">
+        <div className="panel-header">
           <h2>Recent Transactions</h2>
-          <span>{summary?.pendingReminderCount ?? 0} reminders</span>
+          <span>{summary?.recentTransactions.length ?? 0}</span>
         </div>
         {summary && summary.recentTransactions.length === 0 && <EmptyState title="No recent transactions." />}
         {summary && summary.recentTransactions.length > 0 && (

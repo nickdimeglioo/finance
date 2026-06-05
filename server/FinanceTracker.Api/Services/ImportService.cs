@@ -30,6 +30,8 @@ public sealed class ImportService
     private readonly ImportRuleService _importRules;
     private readonly ClassificationRuleService _classificationRules;
     private readonly StorageFileService _storageFiles;
+    private readonly RecurringRuleService _recurringRules;
+    private readonly ILogger<ImportService> _logger;
 
     public ImportService(
         ICurrentUserContext currentUser,
@@ -37,7 +39,9 @@ public sealed class ImportService
         IObjectStorageService storage,
         ImportRuleService importRules,
         ClassificationRuleService classificationRules,
-        StorageFileService storageFiles)
+        StorageFileService storageFiles,
+        RecurringRuleService recurringRules,
+        ILogger<ImportService> logger)
     {
         _currentUser = currentUser;
         _db = db;
@@ -45,6 +49,8 @@ public sealed class ImportService
         _importRules = importRules;
         _classificationRules = classificationRules;
         _storageFiles = storageFiles;
+        _recurringRules = recurringRules;
+        _logger = logger;
     }
 
     public string BuildRawImportPrefix(Guid userId, Guid importBatchId)
@@ -407,6 +413,14 @@ public sealed class ImportService
 
             var result = new ImportCommitResult(imported, skippedDuplicates, rejected, errors);
             await transaction.CommitAsync();
+            try
+            {
+                await _recurringRules.MatchTransactionsAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Import batch {ImportBatchId} committed, but recurring matching failed.", batchId);
+            }
             return result;
         }
         catch

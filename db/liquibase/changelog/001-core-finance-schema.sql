@@ -3,7 +3,7 @@
 --changeset finance:001-core-extensions
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
---changeset finance:001-updated-at-trigger
+--changeset finance:001-updated-at-trigger splitStatements:false
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS trigger AS $$
 BEGIN
@@ -107,4 +107,3 @@ CREATE TABLE IF NOT EXISTS transaction_splits (
 CREATE INDEX IF NOT EXISTS ix_transaction_splits_transaction ON transaction_splits (transaction_id);
 CREATE INDEX IF NOT EXISTS ix_transaction_splits_category ON transaction_splits (category);
 CREATE INDEX IF NOT EXISTS ix_transaction_splits_classification ON transaction_splits (classification);
-

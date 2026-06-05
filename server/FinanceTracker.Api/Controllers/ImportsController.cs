@@ -12,10 +12,12 @@ namespace FinanceTracker.Api.Controllers;
 public sealed class ImportsController : ControllerBase
 {
     private readonly ImportService _importService;
+    private readonly RecurringRuleService _recurringRules;
 
-    public ImportsController(ImportService importService)
+    public ImportsController(ImportService importService, RecurringRuleService recurringRules)
     {
         _importService = importService;
+        _recurringRules = recurringRules;
     }
 
     [HttpPost("from-storage")]
@@ -113,5 +115,14 @@ public sealed class ImportsController : ControllerBase
     {
         var result = await _importService.CommitAsync(id, cancellationToken);
         return result is null ? NotFound() : Ok(result);
+    }
+
+    [HttpPost("{id:guid}/match-recurring")]
+    public async Task<ActionResult<object>> MatchRecurring(Guid id, CancellationToken cancellationToken)
+    {
+        var batch = await _importService.GetPreviewAsync(id, cancellationToken);
+        return batch is null
+            ? NotFound()
+            : Ok(new { matched = await _recurringRules.MatchTransactionsAsync(cancellationToken) });
     }
 }

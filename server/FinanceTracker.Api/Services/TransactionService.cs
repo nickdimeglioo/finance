@@ -11,12 +11,14 @@ public sealed class TransactionService
     private readonly ICurrentUserContext _currentUser;
     private readonly IOrmMapperService _db;
     private readonly ClassificationRuleService _classificationRules;
+    private readonly TagService _tags;
 
-    public TransactionService(ICurrentUserContext currentUser, IOrmMapperService db, ClassificationRuleService classificationRules)
+    public TransactionService(ICurrentUserContext currentUser, IOrmMapperService db, ClassificationRuleService classificationRules, TagService tags)
     {
         _currentUser = currentUser;
         _db = db;
         _classificationRules = classificationRules;
+        _tags = tags;
     }
 
     public async Task<PagedResult<TransactionListItemDto>> ListAsync(TransactionFiltersRequest filters, CancellationToken cancellationToken)
@@ -24,6 +26,11 @@ public sealed class TransactionService
         var page = Math.Max(filters.Page, 1);
         var pageSize = Math.Clamp(filters.PageSize, 1, 250);
         var filtered = await LoadFilteredTransactionsAsync(filters, cancellationToken: cancellationToken);
+        if (filters.TagId is Guid tagId)
+        {
+            var transactionIds = await _tags.LoadTransactionIdsForTagAsync(tagId);
+            filtered = filtered.Where(transaction => transactionIds.Contains(transaction.Id)).ToList();
+        }
         var total = filtered.Count;
         var pageEntities = filtered
             .OrderByDescending(transaction => transaction.Date)

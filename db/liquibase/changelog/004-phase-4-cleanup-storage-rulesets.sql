@@ -35,7 +35,7 @@ BEFORE UPDATE ON storage_files
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
 
---changeset finance:004-import-rule-sets
+--changeset finance:004-import-rule-sets splitStatements:false
 CREATE TABLE IF NOT EXISTS import_rule_sets (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES "AspNetUsers"("Id") ON DELETE CASCADE,

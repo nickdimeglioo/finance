@@ -167,7 +167,8 @@ public sealed class RulesetService
 
     private static RulesetRulesDocumentDto Normalize(RulesetRulesDocumentDto? rules)
     {
-        return rules ?? DefaultRules();
+        var normalized = rules ?? DefaultRules();
+        return normalized with { Rules = normalized.Rules ?? [] };
     }
 
     private static RulesetSourceConfigDto DefaultSourceConfig()

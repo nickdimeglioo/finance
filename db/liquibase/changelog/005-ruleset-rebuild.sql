@@ -56,7 +56,7 @@ BEFORE UPDATE ON import_jobs
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
 
---changeset finance:005-transaction-ruleset-audit
+--changeset finance:005-transaction-ruleset-audit splitStatements:false
 ALTER TABLE transactions
     ADD COLUMN IF NOT EXISTS unique_id varchar(255),
     ADD COLUMN IF NOT EXISTS ruleset_id uuid,
