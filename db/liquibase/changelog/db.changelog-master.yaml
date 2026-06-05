@@ -13,3 +13,5 @@ databaseChangeLog:
       file: changelog/005-ruleset-rebuild.sql
   - include:
       file: changelog/006-phase-5-organization.sql
+  - include:
+      file: changelog/007-phase-6-7-reports-guidance.sql

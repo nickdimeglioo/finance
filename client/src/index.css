@@ -705,6 +705,135 @@ th {
   font-weight: 700;
 }
 
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tab {
+  min-height: 34px;
+  color: var(--pm-text);
+  border-color: var(--pm-border-strong);
+  background: var(--pm-surface);
+}
+
+.tab.active {
+  color: white;
+  border-color: var(--pm-accent);
+  background: var(--pm-accent);
+}
+
+.bar-chart {
+  display: grid;
+  gap: 10px;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: 84px minmax(90px, 1fr) minmax(90px, 1fr) minmax(100px, auto);
+  gap: 10px;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.bar-track {
+  height: 16px;
+  overflow: hidden;
+  border-radius: var(--pm-radius);
+  background: var(--pm-surface-muted);
+}
+
+.bar {
+  display: block;
+  height: 100%;
+}
+
+.bar.income {
+  background: var(--pm-create);
+}
+
+.bar.expense {
+  background: var(--pm-danger);
+}
+
+.sparkline {
+  display: flex;
+  align-items: end;
+  gap: 4px;
+  height: 120px;
+  padding: 12px;
+  border: 1px solid var(--pm-border);
+  border-radius: var(--pm-radius);
+  background: white;
+}
+
+.sparkline span {
+  flex: 1;
+  min-width: 8px;
+  border-radius: 3px 3px 0 0;
+  background: var(--pm-accent);
+}
+
+.guidance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.guidance-card {
+  border: 1px solid var(--pm-border);
+  border-radius: var(--pm-radius);
+  background: var(--pm-surface);
+  padding: 16px;
+}
+
+.guidance-card p {
+  margin: 0 0 12px;
+  color: var(--pm-muted);
+}
+
+.metric-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.metric-list div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.metric-list dt {
+  color: var(--pm-muted);
+  text-transform: capitalize;
+}
+
+.metric-list dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.settings-link-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.settings-link {
+  display: flex;
+  align-items: center;
+  min-height: 42px;
+  border: 1px solid var(--pm-border);
+  border-radius: var(--pm-radius);
+  padding: 0 12px;
+  color: var(--pm-accent);
+  background: white;
+  text-decoration: none;
+  font-weight: 650;
+}
+
 @media (max-width: 760px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -721,7 +850,8 @@ th {
 
   .inline-actions,
   .rule-import-bar,
-  .preview-toolbar {
+  .preview-toolbar,
+  .bar-row {
     grid-template-columns: 1fr;
   }
 

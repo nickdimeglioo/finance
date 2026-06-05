@@ -276,6 +276,126 @@ export interface ReminderDto {
   updatedAt: string;
 }
 
+export interface CashFlowPointDto {
+  month: string;
+  income: number;
+  expenses: number;
+  netCashFlow: number;
+  cumulativeCashFlow: number;
+}
+
+export interface BreakdownItemDto {
+  label: string;
+  amount: number;
+  percentage: number;
+}
+
+export interface BusinessPersonalSummaryDto {
+  businessExpenses: number;
+  personalExpenses: number;
+  mixedExpenses: number;
+  ignoredExpenses: number;
+  unknownExpenses: number;
+  items: BreakdownItemDto[];
+}
+
+export interface BalanceHistoryPointDto {
+  date: string;
+  balance: number;
+}
+
+export interface NetWorthPointDto {
+  date: string;
+  netWorth: number;
+}
+
+export interface ExportRequest {
+  exportType: 'transactions' | 'report';
+  from?: string | null;
+  to?: string | null;
+  accountId?: string | null;
+  classification?: string | null;
+}
+
+export interface ExportFileDto {
+  id: string;
+  exportType: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  createdAt: string;
+  expiresAt?: string | null;
+  downloadUrl: string;
+}
+
+export interface BalanceCheckpointDto {
+  id: string;
+  accountId: string;
+  date: string;
+  balance: number;
+  notes?: string | null;
+  expectedBalance: number;
+  discrepancy: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateBalanceCheckpointRequest {
+  date: string;
+  balance: number;
+  notes?: string | null;
+}
+
+export interface ReconcileAccountDto {
+  accountId: string;
+  from: string;
+  to: string;
+  openingClearedBalance: number;
+  closingExpectedBalance: number;
+  unreconciledTransactions: TransactionListItemDto[];
+}
+
+export interface UserFinanceProfileDto {
+  id: string;
+  dateOfBirth?: string | null;
+  annualIncome?: number | null;
+  incomeType: 'salaried' | 'freelance' | 'mixed' | 'retired' | 'student' | 'other';
+  dependents: number;
+  financialGoals: string[];
+  categoryMappings: Record<string, 'needs' | 'wants' | 'savings'>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdateUserFinanceProfileRequest {
+  dateOfBirth?: string | null;
+  annualIncome?: number | null;
+  incomeType: UserFinanceProfileDto['incomeType'];
+  dependents: number;
+  financialGoals?: string[] | null;
+  categoryMappings?: Record<string, 'needs' | 'wants' | 'savings'> | null;
+}
+
+export interface GuidanceItemDto {
+  id: string;
+  title: string;
+  status: 'on_track' | 'below_target' | 'warning' | 'no_data';
+  message: string;
+  supportingMetrics: Record<string, number>;
+}
+
+export interface GuidanceSummaryDto {
+  from: string;
+  to: string;
+  guidance: GuidanceItemDto[];
+}
+
+export interface CategoryDto {
+  name: string;
+  transactionCount: number;
+  splitCount: number;
+}
+
 export type ImportStatus = 'uploaded' | 'parsed' | 'previewed' | 'committed' | 'failed' | 'cancelled';
 
 export interface ImportBatchDto {

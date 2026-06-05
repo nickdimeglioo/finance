@@ -8,7 +8,10 @@ export function formatMoney(amount: number, currency = 'USD'): string {
 }
 
 export function formatDate(value: string | Date): string {
-  const date = typeof value === 'string' ? new Date(`${value}T00:00:00`) : value;
+  const date =
+  typeof value === 'string'
+    ? new Date(value.includes('T') ? value : `${value}T00:00:00`)
+    : value;
   return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: 'short',

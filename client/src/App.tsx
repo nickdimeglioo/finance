@@ -1,9 +1,10 @@
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
-import { BarChart3, Bell, FileArchive, FileUp, Home, Landmark, NotebookPen, Repeat, Settings, Tags, WalletCards } from 'lucide-react';
+import { BarChart3, Bell, FileArchive, FileUp, Home, Landmark, Lightbulb, NotebookPen, Repeat, Settings, Tags, WalletCards } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { AccountsPage } from './pages/AccountsPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ImportsPage } from './pages/ImportsPage';
+import { GuidancePage } from './pages/GuidancePage';
 import { RulesetPage } from './pages/RulesetPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -24,6 +25,7 @@ const navItems = [
   { to: '/tags', label: 'Tags', icon: Tags },
   { to: '/notes', label: 'Notes', icon: NotebookPen },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
+  { to: '/guidance', label: 'Guidance', icon: Lightbulb },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -64,6 +66,7 @@ function App() {
           <Route path="/tags" element={<TagsPage />} />
           <Route path="/notes" element={<NotesPage />} />
           <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/guidance" element={<GuidancePage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>

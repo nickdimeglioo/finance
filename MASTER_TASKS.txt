@@ -134,3 +134,16 @@ FT-0506 - Build reminders infrastructure, done in pass 10 Phase 5
 FT-P10-0001 - Edit existing ruleset rules, done in pass 10 Phase 5
 FT-P10-0002 - Fix Liquibase PostgreSQL block parsing, done in pass 10 Phase 5
 FT-P3-0005 - Run Liquibase against local database, done in pass 10 Phase 5
+
+Pass 11 Phases 6-7
+------------------
+FT-0601 - Build report endpoints, done in pass 11 Phases 6-7
+FT-0602 - Integrate charts, done in pass 11 Phases 6-7 with broader chart placement tracked as FT-P11-0002
+FT-0603 - Build reports page, done in pass 11 Phases 6-7
+FT-0604 - Build CSV/PDF exports, CSV and stored export flow done in pass 11 Phases 6-7 with PDF tracked as FT-P11-0001
+FT-0605 - Build reconciliation schema, done in pass 11 Phases 6-7
+FT-0606 - Build reconciliation flow, done in pass 11 Phases 6-7
+FT-0701 - Create finance profile extension, done in pass 11 Phases 6-7
+FT-0702 - Build guidance engine, done in pass 11 Phases 6-7
+FT-0703 - Build guidance UI, done in pass 11 Phases 6-7
+FT-0704 - Build settings pages, done in pass 11 Phases 6-7

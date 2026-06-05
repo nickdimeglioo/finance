@@ -1,4 +1,5 @@
 using FinanceTracker.Api.Features.Organization;
+using FinanceTracker.Api.Features.Reports;
 using FinanceTracker.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -22,4 +23,5 @@ public sealed class RecurringRulesController : ControllerBase
 public sealed class SubscriptionsController : ControllerBase
 {
     [HttpGet("status")] public async Task<ActionResult<SubscriptionStatusDto>> Status([FromServices] RecurringRuleService rules, CancellationToken token) => Ok(await rules.StatusAsync(token));
+    [HttpGet("trend")] public async Task<ActionResult<IReadOnlyList<CashFlowPointDto>>> Trend([FromQuery] int months, [FromServices] ReportService reports, CancellationToken token) => Ok(await reports.GetSubscriptionTrendAsync(months <= 0 ? 6 : months, token));
 }
