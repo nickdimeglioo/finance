@@ -13,10 +13,12 @@ namespace FinanceTracker.Api.Controllers;
 public sealed class TransactionsController : ControllerBase
 {
     private readonly TransactionService _transactionService;
+    private readonly TransferLinkService _transferLinks;
 
-    public TransactionsController(TransactionService transactionService)
+    public TransactionsController(TransactionService transactionService, TransferLinkService transferLinks)
     {
         _transactionService = transactionService;
+        _transferLinks = transferLinks;
     }
 
     [HttpGet]
@@ -72,6 +74,20 @@ public sealed class TransactionsController : ControllerBase
         {
             var transaction = await transferService.CreateAsync(request, cancellationToken);
             return CreatedAtAction(nameof(Get), new { id = transaction.Id }, transaction);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpGet("{id:guid}/credit-card-payment-drilldown")]
+    public async Task<ActionResult<CreditCardPaymentDrilldownDto>> GetCreditCardPaymentDrilldown(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var drilldown = await _transferLinks.GetCreditCardPaymentDrilldownAsync(id, cancellationToken);
+            return drilldown is null ? NotFound() : Ok(drilldown);
         }
         catch (ArgumentException ex)
         {

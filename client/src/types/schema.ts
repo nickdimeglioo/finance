@@ -1,7 +1,7 @@
 export type AccountType = 'checking' | 'savings' | 'credit_card' | 'loan' | 'investment' | 'cash' | 'other';
 export type AccountStatus = 'active' | 'archived' | 'closed';
 export type TransactionType = 'income' | 'expense' | 'transfer' | 'adjustment' | 'opening_balance';
-export type TransactionClassification = 'business' | 'personal' | 'mixed' | 'ignored' | 'unknown';
+export type TransactionClassification = 'personal' | 'business' | 'transfer' | 'investment' | 'tax' | 'reimbursement' | 'exclude' | 'mixed' | 'ignored' | 'unknown';
 export type TransactionStatus = 'pending' | 'posted' | 'reconciled' | 'voided';
 export type TransactionSource = 'manual' | 'import' | 'system';
 export type TransactionDirection = 'inflow' | 'outflow' | 'neutral';
@@ -67,6 +67,7 @@ export interface TransactionListItemDto {
   isVoid: boolean;
   isSplit: boolean;
   transferPartnerId?: string | null;
+  hasTransferLinkSuggestion: boolean;
 }
 
 export interface TransactionSplitDto {
@@ -141,6 +142,51 @@ export interface TransactionFiltersRequest {
   includeVoided?: boolean;
   page?: number;
   pageSize?: number;
+}
+
+export interface CreditCardPaymentCoverageRowDto {
+  transactionId: string;
+  date: string;
+  description: string;
+  merchant?: string | null;
+  category?: string | null;
+  originalAmount: number;
+  outstandingBeforePayment: number;
+  coveredAmount: number;
+  remainingAmount: number;
+  coveredPercent: number;
+  currency: string;
+}
+
+export interface CreditCardUnpaidChargeDto {
+  transactionId: string;
+  date: string;
+  description: string;
+  merchant?: string | null;
+  category?: string | null;
+  originalAmount: number;
+  paidAmount: number;
+  remainingAmount: number;
+  paidPercent: number;
+  currency: string;
+}
+
+export interface CreditCardPaymentDrilldownDto {
+  paymentTransactionId: string;
+  sourceTransactionId?: string | null;
+  accountId: string;
+  accountName: string;
+  paymentDate: string;
+  paymentAmount: number;
+  balanceBeforePayment: number;
+  balanceAfterPayment: number;
+  appliedAmount: number;
+  unappliedAmount: number;
+  paymentAppliedPercent: number;
+  balancePaidPercent: number;
+  currentUnpaidAmount: number;
+  coveredRows: CreditCardPaymentCoverageRowDto[];
+  unpaidRows: CreditCardUnpaidChargeDto[];
 }
 
 export interface CurrentUserDto {
@@ -647,6 +693,19 @@ export interface RulesetRuleOutputDto {
   subcategory?: string | null;
   classification?: TransactionClassification | null;
   tags?: string[] | null;
+  tagFrom?: RulesetDynamicTagDto[] | null;
+  transferTargetAccountId?: string | null;
+  transferTargetAccountName?: string | null;
+  transferLinkMode?: 'auto' | 'suggest' | null;
+  transferMatchWindowDays?: number | null;
+}
+
+export interface RulesetDynamicTagDto {
+  field?: string | null;
+  regex: string;
+  prefix?: string | null;
+  suffix?: string | null;
+  format?: string | null;
 }
 
 export interface RulesetDto {
@@ -709,6 +768,13 @@ export interface RulesetImportPreviewRowDto {
   accepted: boolean;
   matchedRuleIds: string[];
   errors: ImportJobErrorDto[];
+  transferTargetAccountId?: string | null;
+  transferTargetAccountName?: string | null;
+  transferLinkMode?: 'auto' | 'suggest' | null;
+  transferMatchWindowDays: number;
+  transferCandidateCount: number;
+  transferLinkStatus: string;
+  transferLinkMessage?: string | null;
 }
 
 export interface RulesetImportResult {
@@ -727,6 +793,10 @@ export interface RulesetImportRowOverride {
   subcategory?: string | null;
   classification?: TransactionClassification | null;
   tags?: string[] | null;
+  transferTargetAccountId?: string | null;
+  transferTargetAccountName?: string | null;
+  transferLinkMode?: 'auto' | 'suggest' | null;
+  transferMatchWindowDays?: number | null;
 }
 
 export interface RulesetImportCommitOptions {

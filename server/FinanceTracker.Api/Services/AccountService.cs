@@ -87,7 +87,7 @@ public sealed class AccountService
                     Date = DateOnly.FromDateTime(now.UtcDateTime),
                     Description = "Opening balance",
                     Type = "opening_balance",
-                    Classification = "ignored",
+                    Classification = "exclude",
                     Amount = Math.Abs(request.OpeningBalance),
                     Currency = account.Currency,
                     Direction = request.OpeningBalance >= 0 ? "inflow" : "outflow",

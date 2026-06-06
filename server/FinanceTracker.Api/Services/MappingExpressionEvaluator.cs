@@ -27,14 +27,30 @@ internal sealed class MappingExpressionEvaluator
             return Compare(left, right, comparison.Value.Operator);
         }
 
+        var coalesce = SplitTopLevelOperator(expression, "||");
+        if (coalesce is not null)
+        {
+            var left = EvaluateExpression(coalesce.Value.Left);
+            return IsBlank(left) ? EvaluateExpression(coalesce.Value.Right) : left;
+        }
+
         var split = SplitTopLevel(expression, ['+', '-']);
         if (split is not null)
         {
             var left = EvaluateExpression(split.Value.Left);
             var right = EvaluateExpression(split.Value.Right);
-            return split.Value.Operator == '+'
-                ? ToDecimal(left) + ToDecimal(right)
-                : ToDecimal(left) - ToDecimal(right);
+            if (split.Value.Operator == '+')
+            {
+                var leftDecimal = TryDecimal(left);
+                var rightDecimal = TryDecimal(right);
+                return leftDecimal.HasValue && rightDecimal.HasValue
+                    ? leftDecimal.Value + rightDecimal.Value
+                    : string.Concat(
+                        Convert.ToString(left, CultureInfo.InvariantCulture),
+                        Convert.ToString(right, CultureInfo.InvariantCulture));
+            }
+
+            return ToDecimal(left) - ToDecimal(right);
         }
 
         if ((expression.StartsWith('\'') && expression.EndsWith('\'')) || (expression.StartsWith('"') && expression.EndsWith('"')))
@@ -73,6 +89,23 @@ internal sealed class MappingExpressionEvaluator
     }
 
     private string? ReadValue(string name)
+    {
+        var normalized = name.Trim();
+        if (normalized.StartsWith("row.", StringComparison.OrdinalIgnoreCase))
+        {
+            return ReadRaw(normalized[4..]);
+        }
+
+        if (normalized.StartsWith("row[", StringComparison.OrdinalIgnoreCase) && normalized.EndsWith(']'))
+        {
+            var key = normalized[4..^1].Trim().Trim('"', '\'');
+            return ReadRaw(key);
+        }
+
+        return ReadRaw(normalized);
+    }
+
+    private string? ReadRaw(string name)
     {
         return _row.TryGetValue(name, out var value)
             ? value
@@ -222,6 +255,12 @@ internal sealed class MappingExpressionEvaluator
         }
 
         return null;
+    }
+
+    private static (string Left, string Right)? SplitTopLevelOperator(string expression, string op)
+    {
+        var index = FindTopLevel(expression, op);
+        return index < 0 ? null : (expression[..index], expression[(index + op.Length)..]);
     }
 
     private static int FindTopLevel(string expression, string op)

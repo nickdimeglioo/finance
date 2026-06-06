@@ -1,11 +1,24 @@
 using FinanceTracker.Api.Features.Organization;
 using FinanceTracker.Api.Features.Transactions;
 using PipelineRunner.Services;
+using PipelineRunner.Utils;
 
 namespace FinanceTracker.Api.Services;
 
 public sealed class TagService
 {
+    private static readonly string[] DefaultColors =
+    [
+        "#1d5d73",
+        "#126b5c",
+        "#7d5a20",
+        "#71559a",
+        "#8d4141",
+        "#38658d",
+        "#5f6f2a",
+        "#8b4f72"
+    ];
+
     private readonly ICurrentUserContext _currentUser;
     private readonly IOrmMapperService _db;
 
@@ -117,6 +130,74 @@ public sealed class TagService
         }
     }
 
+    internal async Task<IReadOnlyList<string>> AssignTagsByNameAsync(
+        FinancialTransaction entity,
+        IReadOnlyList<string> tagNames,
+        MultiTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        if (entity.UserId != _currentUser.UserId)
+        {
+            throw new ArgumentException("Transaction was not found.");
+        }
+
+        var names = NormalizeNames(tagNames);
+        var ownedTags = await transaction.QuerySelect<Tag>()
+            .From<Tag>()
+            .SelectAllFrom<Tag>()
+            .Where(tag => tag.UserId == _currentUser.UserId)
+            .ToListAsync();
+        var tagsByName = ownedTags.ToDictionary(tag => tag.Name, StringComparer.OrdinalIgnoreCase);
+        var now = DateTimeOffset.UtcNow;
+        var assignedTags = new List<Tag>();
+
+        foreach (var name in names)
+        {
+            if (!tagsByName.TryGetValue(name, out var tag))
+            {
+                tag = new Tag
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = _currentUser.UserId,
+                    Name = name,
+                    Color = ColorForName(name),
+                    CreatedAt = now,
+                    UpdatedAt = now
+                };
+                await transaction.Save(tag);
+                tagsByName[name] = tag;
+            }
+
+            assignedTags.Add(tag);
+        }
+
+        var existing = await transaction.QuerySelect<TransactionTag>()
+            .From<TransactionTag>()
+            .SelectAllFrom<TransactionTag>()
+            .Where(join => join.TransactionId == entity.Id)
+            .ToListAsync();
+        foreach (var join in existing)
+        {
+            await transaction.Delete(join);
+        }
+
+        foreach (var tag in assignedTags)
+        {
+            await transaction.Save(new TransactionTag
+            {
+                Id = Guid.NewGuid(),
+                TransactionId = entity.Id,
+                TagId = tag.Id,
+                CreatedAt = now
+            });
+        }
+
+        entity.Tags = RulesetJson.Write(names);
+        entity.UpdatedAt = now;
+        await transaction.Save(entity);
+        return names;
+    }
+
     internal async Task<HashSet<Guid>> LoadTransactionIdsForTagAsync(Guid tagId)
     {
         var tag = await GetOwnedAsync(tagId);
@@ -142,6 +223,19 @@ public sealed class TagService
     private async Task EnsureUniqueAsync(string name, Guid? exceptId) { if ((await LoadOwnedTagsAsync()).Any(tag => tag.Id != exceptId && string.Equals(tag.Name, name.Trim(), StringComparison.OrdinalIgnoreCase))) throw new ArgumentException("Tag name already exists."); }
     private static void Validate(UpsertTagRequest request) { if (string.IsNullOrWhiteSpace(request.Name)) throw new ArgumentException("Tag name is required."); }
     private static IReadOnlyList<string> ReadNames(string json) => RulesetJson.Read<IReadOnlyList<string>>(json, []);
+    private static List<string> NormalizeNames(IReadOnlyList<string> names) => names
+        .Select(EmptyToNull)
+        .OfType<string>()
+        .Select(name => name.ToLowerInvariant())
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(name => name)
+        .ToList();
     private static TagDto ToDto(Tag tag, int count) => new(tag.Id, tag.Name, tag.Color, count, tag.CreatedAt, tag.UpdatedAt);
     private static string? EmptyToNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string ColorForName(string name)
+    {
+        var hash = StringComparer.OrdinalIgnoreCase.GetHashCode(name);
+        var index = ((hash % DefaultColors.Length) + DefaultColors.Length) % DefaultColors.Length;
+        return DefaultColors[index];
+    }
 }

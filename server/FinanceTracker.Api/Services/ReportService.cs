@@ -48,7 +48,7 @@ public sealed class ReportService
         var transactions = await LoadTransactionsAsync(from, to, cancellationToken);
         var splits = await LoadSplitsForTransactionsAsync(transactions, cancellationToken);
         var rows = ExpandRows(transactions, splits)
-            .Where(row => row.Type == "expense" && row.Classification != "ignored")
+            .Where(row => row.Type == "expense" && IsIncludedInSpendingReport(row.Classification))
             .Where(row => string.IsNullOrWhiteSpace(request.Classification) || row.Classification == request.Classification)
             .ToList();
         return BuildBreakdown(rows.GroupBy(row => string.IsNullOrWhiteSpace(row.Category) ? "Uncategorized" : row.Category!), row => row.Amount);
@@ -74,7 +74,7 @@ public sealed class ReportService
     {
         var (from, to) = NormalizeRange(request.From, request.To);
         var rows = (await LoadTransactionsAsync(from, to, cancellationToken))
-            .Where(transaction => transaction.Type == "expense" && transaction.Classification != "ignored")
+            .Where(transaction => transaction.Type == "expense" && IsIncludedInSpendingReport(transaction.Classification))
             .SelectMany(transaction => ReadTags(transaction.Tags).DefaultIfEmpty("Untagged").Select(tag => new ReportRow(tag, transaction.Amount)))
             .ToList();
         return BuildBreakdown(rows.GroupBy(row => row.Label), row => row.Amount);
@@ -239,7 +239,10 @@ public sealed class ReportService
     }
 
     private static bool IsReportableCashFlow(FinancialTransaction transaction)
-        => !transaction.IsVoid && transaction.Type is "income" or "expense";
+        => !transaction.IsVoid && transaction.Type is "income" or "expense" && IsIncludedInSpendingReport(transaction.Classification);
+
+    private static bool IsIncludedInSpendingReport(string classification)
+        => classification is not ("exclude" or "ignored");
 
     private static IReadOnlyList<string> ReadTags(string tags)
         => JsonSerializer.Deserialize<IReadOnlyList<string>>(tags) ?? [];

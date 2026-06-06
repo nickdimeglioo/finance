@@ -121,9 +121,15 @@ export function ReportsPage() {
         <Input label="To" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
         <Select label="Classification" value={classification} onChange={(event) => setClassification(event.target.value)}>
           <option value="">All</option>
-          <option value="business">Business</option>
           <option value="personal">Personal</option>
+          <option value="business">Business</option>
+          <option value="transfer">Transfer</option>
+          <option value="investment">Investment</option>
+          <option value="tax">Tax</option>
+          <option value="reimbursement">Reimbursement</option>
+          <option value="exclude">Exclude</option>
           <option value="mixed">Mixed</option>
+          <option value="ignored">Ignored</option>
           <option value="unknown">Unknown</option>
         </Select>
         <Button type="button" leftIcon={<Download size={16} />} onClick={exportTransactions}>Export CSV</Button>

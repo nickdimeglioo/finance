@@ -26,7 +26,7 @@ import type {
   TransactionClassification,
 } from '../types/schema';
 
-const classifications: TransactionClassification[] = ['personal', 'business', 'mixed', 'ignored', 'unknown'];
+const classifications: TransactionClassification[] = ['personal', 'business', 'transfer', 'investment', 'tax', 'reimbursement', 'exclude', 'mixed', 'ignored', 'unknown'];
 const fieldTargets = ['date', 'amount', 'type', 'isDebit', 'isCredit', 'uniqueId', 'description', 'merchant', 'category', 'subcategory', 'classification', 'tags'];
 const conditionOps = ['contains', 'notContains', 'equals', 'startsWith', 'endsWith', 'regex', 'in', 'isEmpty', 'isNotEmpty', 'gt', 'lt', 'gte', 'lte'];
 const transformTypes = ['toString', 'trim', 'toDecimal', 'parseDate', 'toDate', 'toEnum', 'toBoolean', 'splitTags', 'toUpper', 'toLower'];
@@ -52,6 +52,10 @@ type RuleForm = {
   outputSubcategory: string;
   outputClassification: string;
   outputTags: string;
+  transferTargetAccountId: string;
+  transferTargetAccountName: string;
+  transferLinkMode: string;
+  transferMatchWindowDays: string;
   isActive: boolean;
 };
 
@@ -74,6 +78,10 @@ const emptyRuleForm: RuleForm = {
   outputSubcategory: '',
   outputClassification: '',
   outputTags: '',
+  transferTargetAccountId: '',
+  transferTargetAccountName: '',
+  transferLinkMode: '',
+  transferMatchWindowDays: '',
   isActive: true,
 };
 
@@ -120,6 +128,8 @@ export function RulesetPage() {
         row.subcategory,
         row.type,
         row.classification,
+        row.transferTargetAccountName,
+        row.transferLinkStatus,
         ...row.tags,
       ].some((value) => value?.toLowerCase().includes(search));
       return matchesStatus && matchesSearch;
@@ -342,7 +352,52 @@ export function RulesetPage() {
     {
       key: 'tags',
       label: 'Tags',
-      render: (row) => <input className="table-input" value={row.tags.join(', ')} onChange={(event) => updatePreviewRow(row.rowNumber, { tags: splitTags(event.target.value) })} />,
+      render: (row) => (
+        <PreviewTagEditor
+          tags={row.tags}
+          onChange={(tags) => updatePreviewRow(row.rowNumber, { tags })}
+        />
+      ),
+    },
+    {
+      key: 'transferTargetAccountId',
+      label: 'Link Target',
+      width: 140,
+      render: (row) => (
+        <select
+          className="table-input"
+          value={row.transferTargetAccountId ?? ''}
+          onChange={(event) => {
+            const target = accounts.find((account) => account.id === event.target.value);
+            updatePreviewRow(row.rowNumber, {
+              transferTargetAccountId: event.target.value || null,
+              transferTargetAccountName: target?.nickname ?? null,
+              transferLinkMode: null,
+              transferCandidateCount: 0,
+              transferLinkStatus: event.target.value ? 'account-linked' : 'none',
+              transferLinkMessage: event.target.value ? 'Target account will be linked for payment review.' : null,
+            });
+          }}
+        >
+          <option value="">None</option>
+          {accounts.filter((account) => account.id !== accountId).map((account) => <option key={account.id} value={account.id}>{account.nickname}</option>)}
+        </select>
+      ),
+    },
+    {
+      key: 'transferLinkStatus',
+      label: 'Link Status',
+      width: 130,
+      render: (row) => (
+        row.transferLinkStatus === 'none'
+          ? <span className="muted">-</span>
+          : <span title={row.transferLinkMessage ?? undefined}>
+            <StatusBadge
+              label={`${displayEnum(row.transferLinkStatus)}${row.transferCandidateCount ? ` (${row.transferCandidateCount})` : ''}`}
+              tone={row.transferLinkStatus === 'account-linked' ? 'success' : row.transferLinkStatus === 'unresolved' ? 'warning' : 'neutral'}
+            />
+          </span>
+      ),
     },
     {
       key: 'amount',
@@ -589,6 +644,19 @@ export function RulesetPage() {
                 {classifications.map((classification) => <option key={classification} value={classification}>{displayEnum(classification)}</option>)}
               </Select>
               <Input label="Tags" value={ruleForm.outputTags} onChange={(event) => setRuleForm({ ...ruleForm, outputTags: event.target.value })} />
+              <Select label="Transfer Target" value={ruleForm.transferTargetAccountId} onChange={(event) => {
+                const target = accounts.find((account) => account.id === event.target.value);
+                setRuleForm({
+                  ...ruleForm,
+                  transferTargetAccountId: event.target.value,
+                  transferTargetAccountName: target?.nickname ?? '',
+                  transferLinkMode: '',
+                  transferMatchWindowDays: '',
+                });
+              }}>
+                <option value="">No link target</option>
+                {accounts.map((account) => <option key={account.id} value={account.id}>{account.nickname}</option>)}
+              </Select>
             </>
           )}
           <Button type="submit" disabled={!ruleset} leftIcon={<Plus size={15} />}>Add Rule</Button>
@@ -616,6 +684,58 @@ export function RulesetPage() {
   );
 }
 
+function PreviewTagEditor({ tags, onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
+  const [isAdding, setIsAdding] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  function removeTag(tag: string) {
+    onChange(tags.filter((item) => item.toLowerCase() !== tag.toLowerCase()));
+  }
+
+  function addTag() {
+    const [tag] = splitTags(draft);
+    if (tag && !tags.some((item) => item.toLowerCase() === tag.toLowerCase())) {
+      onChange([...tags, tag]);
+    }
+    setDraft('');
+    setIsAdding(false);
+  }
+
+  return (
+    <div className="preview-tag-editor">
+      {tags.map((tag) => (
+        <span className="tag-chip editable" key={tag}>
+          <span>{tag}</span>
+          <button type="button" className="chip-icon-button" aria-label={`Remove ${tag}`} onClick={() => removeTag(tag)}>
+            <X size={12} />
+          </button>
+        </span>
+      ))}
+      {isAdding
+        ? <input
+          className="tag-add-input"
+          autoFocus
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={addTag}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              addTag();
+            }
+            if (event.key === 'Escape') {
+              setDraft('');
+              setIsAdding(false);
+            }
+          }}
+        />
+        : <button type="button" className="tag-add-button" aria-label="Add tag" onClick={() => setIsAdding(true)}>
+          <Plus size={13} />
+        </button>}
+    </div>
+  );
+}
+
 function ruleFromForm(form: RuleForm): RulesetRuleDefinitionDto {
   const match = conditionFromForm(form);
   return {
@@ -640,6 +760,10 @@ function ruleFromForm(form: RuleForm): RulesetRuleDefinitionDto {
       subcategory: form.outputSubcategory || null,
       classification: (form.outputClassification || null) as TransactionClassification | null,
       tags: splitTags(form.outputTags),
+      transferTargetAccountId: form.transferTargetAccountId || null,
+      transferTargetAccountName: form.transferTargetAccountName || null,
+      transferLinkMode: null,
+      transferMatchWindowDays: null,
     },
   };
 }
@@ -695,6 +819,10 @@ function csvRuleToDefinition(row: Record<string, string>): RulesetRuleDefinition
     subcategory: read(row, 'outputSubcategory', 'subcategory') || null,
     classification: (read(row, 'outputClassification', 'classification') || null) as TransactionClassification | null,
     tags: splitTags(read(row, 'outputTags', 'tags')),
+    transferTargetAccountId: read(row, 'transferTargetAccountId', 'outputTransferTargetAccountId') || null,
+    transferTargetAccountName: read(row, 'transferTargetAccountName', 'outputTransferTargetAccountName') || null,
+    transferLinkMode: (read(row, 'transferLinkMode', 'outputTransferLinkMode') || null) as RulesetRuleOutputDto['transferLinkMode'],
+    transferMatchWindowDays: read(row, 'transferMatchWindowDays', 'outputTransferMatchWindowDays') ? Number(read(row, 'transferMatchWindowDays', 'outputTransferMatchWindowDays')) : null,
   };
 
   return {
@@ -800,6 +928,8 @@ function describeOutput(output?: RulesetRuleOutputDto | null) {
     output.subcategory,
     output.classification ? displayEnum(output.classification) : '',
     ...(output.tags ?? []),
+    ...(output.tagFrom ?? []).map((extractor) => `tag from ${extractor.field ?? 'description'}`),
+    output.transferTargetAccountName ? `link ${output.transferTargetAccountName}` : '',
   ].filter(Boolean).join(' · ');
 }
 
@@ -840,6 +970,10 @@ function toRowOverride(row: RulesetImportPreviewRowDto): RulesetImportRowOverrid
     subcategory: row.subcategory,
     classification: row.classification,
     tags: row.tags,
+    transferTargetAccountId: row.transferTargetAccountId,
+    transferTargetAccountName: row.transferTargetAccountName,
+    transferLinkMode: null,
+    transferMatchWindowDays: null,
   };
 }
 

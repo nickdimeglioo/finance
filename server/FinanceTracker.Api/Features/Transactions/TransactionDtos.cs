@@ -25,6 +25,7 @@ public sealed class TransactionListItemDto
     public bool IsVoid { get; set; }
     public bool IsSplit { get; set; }
     public Guid? TransferPartnerId { get; set; }
+    public bool HasTransferLinkSuggestion { get; set; }
 }
 
 public sealed class TransactionDetailDto
@@ -54,6 +55,7 @@ public sealed class TransactionDetailDto
     public bool IsVoid { get; set; }
     public bool IsSplit { get; set; }
     public Guid? TransferPartnerId { get; set; }
+    public bool HasTransferLinkSuggestion { get; set; }
     public Guid? RecurringRuleId { get; set; }
     public IReadOnlyList<TransactionSplitDto> Splits { get; set; } = [];
     public DateTimeOffset CreatedAt { get; set; }
@@ -130,3 +132,45 @@ public sealed class TransactionFiltersRequest
 }
 
 public sealed record TransactionPageDto(PagedResult<TransactionListItemDto> Result);
+
+public sealed record CreditCardPaymentDrilldownDto(
+    Guid PaymentTransactionId,
+    Guid? SourceTransactionId,
+    Guid AccountId,
+    string AccountName,
+    DateOnly PaymentDate,
+    decimal PaymentAmount,
+    decimal BalanceBeforePayment,
+    decimal BalanceAfterPayment,
+    decimal AppliedAmount,
+    decimal UnappliedAmount,
+    decimal PaymentAppliedPercent,
+    decimal BalancePaidPercent,
+    decimal CurrentUnpaidAmount,
+    IReadOnlyList<CreditCardPaymentCoverageRowDto> CoveredRows,
+    IReadOnlyList<CreditCardUnpaidChargeDto> UnpaidRows);
+
+public sealed record CreditCardPaymentCoverageRowDto(
+    Guid TransactionId,
+    DateOnly Date,
+    string Description,
+    string? Merchant,
+    string? Category,
+    decimal OriginalAmount,
+    decimal OutstandingBeforePayment,
+    decimal CoveredAmount,
+    decimal RemainingAmount,
+    decimal CoveredPercent,
+    string Currency);
+
+public sealed record CreditCardUnpaidChargeDto(
+    Guid TransactionId,
+    DateOnly Date,
+    string Description,
+    string? Merchant,
+    string? Category,
+    decimal OriginalAmount,
+    decimal PaidAmount,
+    decimal RemainingAmount,
+    decimal PaidPercent,
+    string Currency);

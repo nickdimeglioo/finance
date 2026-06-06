@@ -19,7 +19,11 @@ public sealed record RulesetImportRowOverrideDto(
     string? Category,
     string? Subcategory,
     string? Classification,
-    IReadOnlyList<string>? Tags);
+    IReadOnlyList<string>? Tags,
+    Guid? TransferTargetAccountId = null,
+    string? TransferTargetAccountName = null,
+    string? TransferLinkMode = null,
+    int? TransferMatchWindowDays = null);
 
 public sealed record RulesetImportResult(
     ImportJobDto Job,
@@ -62,7 +66,14 @@ public sealed record RulesetImportPreviewRowDto(
     bool IsDuplicate,
     bool Accepted,
     IReadOnlyList<string> MatchedRuleIds,
-    IReadOnlyList<ImportJobErrorDto> Errors);
+    IReadOnlyList<ImportJobErrorDto> Errors,
+    Guid? TransferTargetAccountId = null,
+    string? TransferTargetAccountName = null,
+    string? TransferLinkMode = null,
+    int TransferMatchWindowDays = 7,
+    int TransferCandidateCount = 0,
+    string TransferLinkStatus = "none",
+    string? TransferLinkMessage = null);
 
 public sealed record ParsedCsvRow(
     int RowNumber,
@@ -95,4 +106,8 @@ public sealed record ClassifiedRulesetTransaction(
     string? Subcategory,
     string Classification,
     IReadOnlyList<string> Tags,
-    IReadOnlyList<string> MatchedRuleIds);
+    IReadOnlyList<string> MatchedRuleIds,
+    Guid? TransferTargetAccountId,
+    string? TransferTargetAccountName,
+    string? TransferLinkMode,
+    int TransferMatchWindowDays);

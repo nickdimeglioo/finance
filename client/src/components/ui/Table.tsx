@@ -49,7 +49,7 @@ export function Table<T>({ data, columns, rowKey, loading = false, emptyMessage 
             {data.map((row, index) => (
               <tr key={resolveKey(row, index)} className="pm-table-row">
                 {columns.map((column) => (
-                  <td key={column.key} className={`pm-table-cell align-${column.align ?? 'left'}`}>
+                  <td key={column.key} className={`pm-table-cell align-${column.align ?? 'left'}`} data-label={column.label}>
                     {column.render ? column.render(row) : String((row as Record<string, unknown>)[column.key] ?? '')}
                   </td>
                 ))}

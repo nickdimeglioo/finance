@@ -147,3 +147,22 @@ FT-0701 - Create finance profile extension, done in pass 11 Phases 6-7
 FT-0702 - Build guidance engine, done in pass 11 Phases 6-7
 FT-0703 - Build guidance UI, done in pass 11 Phases 6-7
 FT-0704 - Build settings pages, done in pass 11 Phases 6-7
+
+Pass 12 Import Transaction Polish
+---------------------------------
+FT-P12-0001 - Fix ruleset fallback enrichment behavior, done in pass 12 Import Transaction Polish
+FT-P12-0002 - Auto-create imported transaction tags, done in pass 12 Import Transaction Polish
+FT-P12-0003 - Add transaction table filters and pagination, done in pass 12 Import Transaction Polish
+FT-P12-0004 - Add subscription prompt and file import, done in pass 12 Import Transaction Polish
+FT-P12-0005 - Improve tag colors and responsive tables, done in pass 12 Import Transaction Polish
+
+Pass 13 Transfer Link Drilldown
+-------------------------------
+FT-P13-0001 - Add transfer-link ruleset outputs, done in pass 13 Transfer Link Drilldown
+FT-P13-0002 - Persist and manage transaction transfer links, done in pass 13 Transfer Link Drilldown
+FT-P13-0003 - Add credit-card payment drilldown, done in pass 13 Transfer Link Drilldown
+
+Pass 14 Account Link Review
+---------------------------
+FT-P14-0001 - Replace transfer candidate linking with account-linked payment review, done in pass 14 Account Link Review
+FT-P14-0002 - Compute credit-card payment allocation from linked account review, done in pass 14 Account Link Review

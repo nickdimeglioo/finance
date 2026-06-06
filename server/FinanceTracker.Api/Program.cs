@@ -37,6 +37,7 @@ builder.Services.AddScoped<HealthDiagnosticService>();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<TransactionService>();
 builder.Services.AddScoped<TransferService>();
+builder.Services.AddScoped<TransferLinkService>();
 builder.Services.AddScoped<ImportService>();
 builder.Services.AddScoped<ImportRuleService>();
 builder.Services.AddScoped<ClassificationRuleService>();

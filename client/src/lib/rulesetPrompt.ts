@@ -25,11 +25,20 @@ FIELD RULES
   - splitTags: split comma, semicolon, or pipe-separated tags.
 - Supported expression functions: COALESCE, IF, CONCAT, ABS, ROUND, TRIM, UPPER, LOWER.
 - Expressions support +, -, >, <, >=, <=, ==, !=, quoted strings, numbers, and raw column names.
+- In expressions, + adds numbers when both sides are numeric and concatenates otherwise.
+- Prefer CONCAT(...) for stable string IDs and COALESCE(...) for debit/credit fallbacks, for example CONCAT(row["Date"], "|", row["Description"], "|", COALESCE(row["Debit"], row["Credit"], "")).
 - Valid transaction types: income, expense, transfer, adjustment, opening_balance.
 
 ENRICHMENT / CLASSIFICATION RULES
-- Enrichment rules use match plus output and may update merchant, category, subcategory, classification, and tags.
-- Valid classifications: business, personal, mixed, ignored, unknown.
+- Enrichment rules use match plus output and may update merchant, category, subcategory, classification, tags, and linked-account hints.
+- Valid classifications, using only these lowercase values: personal (normal personal income/expenses), business (business-related transactions), transfer (movement between own accounts), investment (brokerage, retirement, asset activity), tax (tax payments/refunds), reimbursement (paid back by someone/employer), exclude (not counted in spending reports), mixed, ignored, unknown. Prefer exclude over ignored for new non-reportable rules.
+- Do not use income as a classification. Use type: income for money received, then choose a valid classification such as personal, business, tax, or reimbursement.
+- To tag people or other parsed values, use output.tagFrom instead of writing one rule per person. Each extractor supports field, regex, prefix, suffix, and format. The regex should capture the value in a named group called tag/value or in the first capture group; the captured value is slugged before prefix/suffix or {value} replacement.
+- For payments or movements between your own accounts, use classification: transfer plus linked-account output fields. Do not create fake classifications.
+- Linked-account output fields:
+  - transferTargetAccountId: exact account id when known.
+  - transferTargetAccountName: exact account nickname when id is not known; preserve names exactly, including snake_case names like discover_personal.
+- These fields identify the other account only. Do not try to match a specific counterpart transaction in rules.
 - All matching enrichment rules run, so later rules can add tags or override earlier outputs.
 - Fallback values apply after enrichment rules.
 
@@ -79,11 +88,36 @@ JSON EXAMPLES
       ]
     },
     "output": { "category": "Meals", "classification": "personal", "tags": ["food", "card"] }
+  },
+  {
+    "id": "zelle-contact-tag",
+    "name": "Zelle contact tag",
+    "kind": "enrichment",
+    "priority": 120,
+    "isActive": true,
+    "match": { "op": "regex", "field": "description", "value": "TD\\\\s+ZELLE\\\\s+(SENT|RECEIVED).*?\\\\bZelle\\\\s+(?<tag>[A-Z][A-Z .'-]+)$" },
+    "output": {
+      "tags": ["zelle"],
+      "tagFrom": [{ "field": "description", "regex": "TD\\\\s+ZELLE\\\\s+(?:SENT|RECEIVED).*?\\\\bZelle\\\\s+(?<tag>[A-Z][A-Z .'-]+)$", "prefix": "person-" }]
+    }
+  },
+  {
+    "id": "credit-card-payment-link",
+    "name": "Credit card payment to owned card",
+    "kind": "enrichment",
+    "priority": 130,
+    "isActive": true,
+    "match": { "op": "contains", "field": "description", "value": "PAYMENT TO CREDIT CARD" },
+    "output": {
+      "classification": "transfer",
+      "category": "Credit Card Payment",
+      "transferTargetAccountName": "Rewards Credit Card"
+    }
   }
 ]
 
 CSV HEADERS
-kind,id,name,priority,isActive,target,matchField,matchOp,matchValue,source,expr,value,transformType,transformFormat,transformValue,outputMerchant,outputCategory,outputSubcategory,outputClassification,outputTags
+kind,id,name,priority,isActive,target,matchField,matchOp,matchValue,source,expr,value,transformType,transformFormat,transformValue,outputMerchant,outputCategory,outputSubcategory,outputClassification,outputTags,transferTargetAccountId,transferTargetAccountName
 
 CSV can represent one simple condition and one field flow step per rule. Use JSON for nested conditions or multiple flow steps.`;
 

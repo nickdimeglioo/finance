@@ -3,6 +3,7 @@ import { apiRequest } from '../lib/http';
 import type {
   CreateTransactionRequest,
   CreateTransferRequest,
+  CreditCardPaymentDrilldownDto,
   PagedResult,
   TransactionDetailDto,
   TransactionFiltersRequest,
@@ -68,6 +69,10 @@ export function replaceTransactionTags(id: string, tagIds: string[]): Promise<st
     method: 'PUT',
     body: JSON.stringify({ tagIds }),
   });
+}
+
+export function getCreditCardPaymentDrilldown(id: string): Promise<CreditCardPaymentDrilldownDto> {
+  return apiRequest<CreditCardPaymentDrilldownDto>(`/transactions/${id}/credit-card-payment-drilldown`);
 }
 
 export function useTransactions(filters: TransactionFiltersRequest = {}) {

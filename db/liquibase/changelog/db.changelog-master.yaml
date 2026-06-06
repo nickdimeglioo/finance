@@ -15,3 +15,7 @@ databaseChangeLog:
       file: changelog/006-phase-5-organization.sql
   - include:
       file: changelog/007-phase-6-7-reports-guidance.sql
+  - include:
+      file: changelog/008-classification-values.sql
+  - include:
+      file: changelog/009-transfer-link-suggestions.sql

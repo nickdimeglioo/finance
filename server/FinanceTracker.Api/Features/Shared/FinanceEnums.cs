@@ -31,8 +31,13 @@ public static class FinanceValues
 
     public static readonly string[] Classifications =
     [
-        "business",
         "personal",
+        "business",
+        "transfer",
+        "investment",
+        "tax",
+        "reimbursement",
+        "exclude",
         "mixed",
         "ignored",
         "unknown"
@@ -53,4 +58,3 @@ public static class FinanceValues
         "system"
     ];
 }
-

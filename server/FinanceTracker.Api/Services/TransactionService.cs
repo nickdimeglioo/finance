@@ -12,13 +12,15 @@ public sealed class TransactionService
     private readonly IOrmMapperService _db;
     private readonly ClassificationRuleService _classificationRules;
     private readonly TagService _tags;
+    private readonly TransferLinkService _transferLinks;
 
-    public TransactionService(ICurrentUserContext currentUser, IOrmMapperService db, ClassificationRuleService classificationRules, TagService tags)
+    public TransactionService(ICurrentUserContext currentUser, IOrmMapperService db, ClassificationRuleService classificationRules, TagService tags, TransferLinkService transferLinks)
     {
         _currentUser = currentUser;
         _db = db;
         _classificationRules = classificationRules;
         _tags = tags;
+        _transferLinks = transferLinks;
     }
 
     public async Task<PagedResult<TransactionListItemDto>> ListAsync(TransactionFiltersRequest filters, CancellationToken cancellationToken)
@@ -41,6 +43,7 @@ public sealed class TransactionService
         foreach (var (item, entity) in items.Zip(pageEntities))
         {
             item.Tags = ReadTags(entity.Tags);
+            item.HasTransferLinkSuggestion = await _transferLinks.HasOpenSuggestionAsync(entity.Id, cancellationToken);
         }
 
         return new PagedResult<TransactionListItemDto>(items, page, pageSize, total);
@@ -442,6 +445,7 @@ public sealed class TransactionService
     {
         var detail = entity.MapTo<FinancialTransaction, TransactionDetailDto>();
         detail.Tags = ReadTags(entity.Tags);
+        detail.HasTransferLinkSuggestion = await _transferLinks.HasOpenSuggestionAsync(entity.Id, cancellationToken);
         var query = transaction is null
             ? _db.QuerySelect<TransactionSplit>()
             : transaction.QuerySelect<TransactionSplit>();

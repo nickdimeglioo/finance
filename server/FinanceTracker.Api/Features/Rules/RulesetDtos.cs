@@ -71,6 +71,18 @@ public sealed record RulesetRuleOutputDto(
     string? Category,
     string? Subcategory,
     string? Classification,
-    IReadOnlyList<string>? Tags);
+    IReadOnlyList<string>? Tags,
+    IReadOnlyList<RulesetDynamicTagDto>? TagFrom,
+    Guid? TransferTargetAccountId,
+    string? TransferTargetAccountName,
+    string? TransferLinkMode,
+    int? TransferMatchWindowDays);
+
+public sealed record RulesetDynamicTagDto(
+    string? Field,
+    string Regex,
+    string? Prefix,
+    string? Suffix,
+    string? Format);
 
 public sealed record ImportRulesetJsonRequest(RulesetDto Ruleset);

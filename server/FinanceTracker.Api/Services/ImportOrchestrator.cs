@@ -19,6 +19,8 @@ public sealed class ImportOrchestrator
     private readonly RulesetClassificationEngine _classification;
     private readonly DeduplicationService _deduplication;
     private readonly RecurringRuleService _recurringRules;
+    private readonly TagService _tags;
+    private readonly TransferLinkService _transferLinks;
     private readonly ILogger<ImportOrchestrator> _logger;
 
     public ImportOrchestrator(
@@ -30,6 +32,8 @@ public sealed class ImportOrchestrator
         RulesetClassificationEngine classification,
         DeduplicationService deduplication,
         RecurringRuleService recurringRules,
+        TagService tags,
+        TransferLinkService transferLinks,
         ILogger<ImportOrchestrator> logger)
     {
         _currentUser = currentUser;
@@ -40,6 +44,8 @@ public sealed class ImportOrchestrator
         _classification = classification;
         _deduplication = deduplication;
         _recurringRules = recurringRules;
+        _tags = tags;
+        _transferLinks = transferLinks;
         _logger = logger;
     }
 
@@ -102,7 +108,7 @@ public sealed class ImportOrchestrator
             }
             var existingUniqueIds = await _deduplication.LoadExistingUniqueIdsAsync(account.Id, transaction: null, cancellationToken);
             var seenUniqueIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var preview = BuildPreview(classifiedRows, existingUniqueIds, seenUniqueIds);
+            var preview = await BuildPreviewAsync(account.Id, classifiedRows, existingUniqueIds, seenUniqueIds, cancellationToken);
             if (!isDryRun && request.AcceptedRowNumbers is not null)
             {
                 var acceptedRows = request.AcceptedRowNumbers.ToHashSet();
@@ -209,6 +215,19 @@ public sealed class ImportOrchestrator
                 };
 
                 await transaction.Save(entity);
+                await _transferLinks.ApplyImportLinkAsync(
+                    entity,
+                    classified.TransferTargetAccountId,
+                    classified.TransferTargetAccountName,
+                    classified.TransferLinkMode,
+                    classified.TransferMatchWindowDays,
+                    account,
+                    transaction,
+                    cancellationToken);
+                if (classified.Tags.Count > 0)
+                {
+                    await _tags.AssignTagsByNameAsync(entity, classified.Tags, transaction, cancellationToken);
+                }
                 existingUniqueIds.Add(classified.Mapped.UniqueId);
             }
 
@@ -221,10 +240,12 @@ public sealed class ImportOrchestrator
         }
     }
 
-    private static IReadOnlyList<RulesetImportPreviewRowDto> BuildPreview(
+    private async Task<IReadOnlyList<RulesetImportPreviewRowDto>> BuildPreviewAsync(
+        Guid accountId,
         IReadOnlyList<ClassifiedRulesetTransaction> rows,
         HashSet<string> existingUniqueIds,
-        HashSet<string> seenUniqueIds)
+        HashSet<string> seenUniqueIds,
+        CancellationToken cancellationToken)
     {
         var preview = new List<RulesetImportPreviewRowDto>();
         foreach (var row in rows)
@@ -240,6 +261,17 @@ public sealed class ImportOrchestrator
             {
                 errors.Add(new ImportJobErrorDto(row.Mapped.RowNumber, "classification", "Classification is invalid."));
             }
+
+            var transferPreview = await _transferLinks.PreviewImportLinkAsync(
+                accountId,
+                row.Mapped.Date,
+                row.Mapped.Amount,
+                row.TransferTargetAccountId,
+                row.TransferTargetAccountName,
+                row.TransferLinkMode,
+                row.TransferMatchWindowDays,
+                transaction: null,
+                cancellationToken);
 
             preview.Add(new RulesetImportPreviewRowDto(
                 row.Mapped.RowNumber,
@@ -257,7 +289,14 @@ public sealed class ImportOrchestrator
                 duplicate,
                 errors.Count == 0 && !duplicate,
                 row.MatchedRuleIds,
-                errors));
+                errors,
+                transferPreview.TargetAccountId,
+                transferPreview.TargetAccountName,
+                transferPreview.LinkMode,
+                transferPreview.MatchWindowDays,
+                transferPreview.CandidateCount,
+                transferPreview.Status,
+                transferPreview.Message));
         }
 
         return preview;
@@ -281,6 +320,8 @@ public sealed class ImportOrchestrator
             var type = NormalizeValue(item.Type)?.ToLowerInvariant();
             var description = NormalizeValue(item.Description);
             var classification = NormalizeValue(item.Classification)?.ToLowerInvariant() ?? "unknown";
+            var transferLinkMode = NormalizeTransferLinkMode(item.TransferLinkMode);
+            var transferMatchWindowDays = NormalizeWindow(item.TransferMatchWindowDays);
             decimal? amount = item.Amount is null ? null : Math.Abs(item.Amount.Value);
             var uniqueId = row.Mapped.UniqueId;
             if (string.IsNullOrWhiteSpace(uniqueId) && item.Date.HasValue && amount > 0 && !string.IsNullOrWhiteSpace(description))
@@ -334,7 +375,11 @@ public sealed class ImportOrchestrator
                 Category = mapped.Category,
                 Subcategory = mapped.Subcategory,
                 Classification = classification,
-                Tags = mapped.Tags
+                Tags = mapped.Tags,
+                TransferTargetAccountId = item.TransferTargetAccountId,
+                TransferTargetAccountName = NormalizeValue(item.TransferTargetAccountName),
+                TransferLinkMode = transferLinkMode,
+                TransferMatchWindowDays = transferMatchWindowDays
             };
         }).ToList();
     }
@@ -352,6 +397,17 @@ public sealed class ImportOrchestrator
             .Select(tag => tag.ToLowerInvariant())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private static string? NormalizeTransferLinkMode(string? value)
+    {
+        var normalized = NormalizeValue(value)?.ToLowerInvariant();
+        return normalized is "auto" or "suggest" ? normalized : null;
+    }
+
+    private static int NormalizeWindow(int? value)
+    {
+        return Math.Clamp(value is null or <= 0 ? 7 : value.Value, 0, 45);
     }
 
     private static ImportJobDto ToDto(ImportJob job)
