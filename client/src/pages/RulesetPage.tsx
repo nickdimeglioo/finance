@@ -117,7 +117,7 @@ export function RulesetPage() {
     const search = previewSearch.trim().toLowerCase();
     return (previewResult?.previewRows ?? []).filter((row) => {
       const matchesStatus = previewStatus === 'all'
-        || (previewStatus === 'ready' && row.accepted && !row.isDuplicate && row.errors.length === 0)
+        || (previewStatus === 'ready' && row.accepted && row.errors.length === 0)
         || (previewStatus === 'excluded' && !row.accepted)
         || (previewStatus === 'duplicate' && row.isDuplicate)
         || (previewStatus === 'error' && row.errors.length > 0);
@@ -297,7 +297,6 @@ export function RulesetPage() {
       render: (row) => (
         <Checkbox
           checked={row.accepted}
-          disabled={row.isDuplicate}
           aria-label={`Use row ${row.rowNumber}`}
           onChange={(event) => updatePreviewRow(row.rowNumber, { accepted: event.target.checked })}
         />
@@ -413,7 +412,7 @@ export function RulesetPage() {
           {row.errors.length > 0
             ? <StatusBadge label="Error" tone="danger" />
             : row.isDuplicate
-              ? <StatusBadge label="Duplicate" tone="warning" />
+              ? <StatusBadge label={row.accepted ? 'Included Duplicate' : 'Duplicate'} tone={row.accepted ? 'success' : 'warning'} />
               : row.accepted
                 ? <StatusBadge label="Ready" tone="success" />
                 : <StatusBadge label="Excluded" tone="neutral" />}
@@ -530,7 +529,7 @@ export function RulesetPage() {
           </div>
           <div className="row-actions">
             <Button type="button" size="sm" variant="secondary" disabled={!previewResult} onClick={() => {
-              const visible = new Set(filteredPreviewRows.filter((row) => !row.isDuplicate).map((row) => row.rowNumber));
+              const visible = new Set(filteredPreviewRows.filter((row) => row.errors.length === 0).map((row) => row.rowNumber));
               setPreviewResult((current) => current ? { ...current, previewRows: current.previewRows.map((row) => visible.has(row.rowNumber) ? { ...row, accepted: true } : row) } : current);
             }}>Select Filtered</Button>
             <Button type="button" size="sm" variant="secondary" disabled={!previewResult} onClick={() => {

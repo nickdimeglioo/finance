@@ -35,6 +35,7 @@ public sealed record ExportRequest(
     DateOnly? From,
     DateOnly? To,
     Guid? AccountId,
+    IReadOnlyList<Guid>? AccountIds,
     string? Classification);
 
 public sealed record ExportFileDto(
@@ -46,4 +47,3 @@ public sealed record ExportFileDto(
     DateTimeOffset CreatedAt,
     DateTimeOffset? ExpiresAt,
     string DownloadUrl);
-

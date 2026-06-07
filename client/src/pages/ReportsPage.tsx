@@ -1,12 +1,13 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Download, RotateCw } from 'lucide-react';
-import { Button, EmptyState, Input, Select, StatusBadge, Table, type TableColumn } from '../components/ui';
+import { Button, Checkbox, EmptyState, Input, Select, StatusBadge, Table, type TableColumn } from '../components/ui';
 import { displayEnum } from '../lib/display';
 import { formatDate, formatMoney, monthRange, toApiDate } from '../lib/financeFormat';
 import { useAccounts } from '../services/accountsService';
 import { createCheckpoint, getReconcile, listCheckpoints } from '../services/reconciliationService';
 import {
   createTransactionsExport,
+  downloadExportFile,
   getBalanceHistory,
   getBusinessPersonal,
   getCashFlow,
@@ -39,11 +40,13 @@ function lastTwelveMonths(): { from: string; to: string } {
 }
 
 export function ReportsPage() {
+  const { accounts } = useAccounts();
   const currentMonth = monthRange();
   const [tab, setTab] = useState<Tab>('cashFlow');
   const [from, setFrom] = useState(currentMonth.from);
   const [to, setTo] = useState(currentMonth.to);
   const [classification, setClassification] = useState('');
+  const [exportAccountIds, setExportAccountIds] = useState<string[]>([]);
   const [cashFlow, setCashFlow] = useState<CashFlowPointDto[]>([]);
   const [categories, setCategories] = useState<BreakdownItemDto[]>([]);
   const [tags, setTags] = useState<BreakdownItemDto[]>([]);
@@ -82,10 +85,48 @@ export function ReportsPage() {
     void loadReports();
   }, [from, to, classification]);
 
+  useEffect(() => {
+    if (accounts.length === 0) {
+      return;
+    }
+
+    setExportAccountIds((current) => {
+      const available = new Set(accounts.map((account) => account.id));
+      const retained = current.filter((id) => available.has(id));
+      return retained.length > 0 ? retained : accounts.map((account) => account.id);
+    });
+  }, [accounts]);
+
   async function exportTransactions() {
-    const created = await createTransactionsExport({ exportType: 'transactions', from, to, classification: classification || null });
-    setExports([created, ...exports]);
-    window.location.href = created.downloadUrl;
+    setMessage(null);
+    try {
+      const created = await createTransactionsExport({
+        exportType: 'transactions',
+        from,
+        to,
+        accountIds: exportAccountIds,
+        classification: classification || null,
+      });
+      setExports([created, ...exports]);
+      await downloadExportFile(created);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Unable to export transactions.');
+    }
+  }
+
+  async function downloadStoredExport(file: ExportFileDto) {
+    setMessage(null);
+    try {
+      await downloadExportFile(file);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Unable to download export.');
+    }
+  }
+
+  function toggleExportAccount(accountId: string, checked: boolean) {
+    setExportAccountIds((current) => checked
+      ? [...current, accountId]
+      : current.filter((id) => id !== accountId));
   }
 
   return (
@@ -132,7 +173,26 @@ export function ReportsPage() {
           <option value="ignored">Ignored</option>
           <option value="unknown">Unknown</option>
         </Select>
-        <Button type="button" leftIcon={<Download size={16} />} onClick={exportTransactions}>Export CSV</Button>
+        <div className="field-span">
+          <div className="panel-header compact-header">
+            <span className="pm-label">Export accounts</span>
+            <div className="row-actions">
+              <Button type="button" size="sm" variant="secondary" onClick={() => setExportAccountIds(accounts.map((account) => account.id))}>All</Button>
+              <Button type="button" size="sm" variant="secondary" onClick={() => setExportAccountIds([])}>Clear</Button>
+            </div>
+          </div>
+          <div className="selector-grid">
+            {accounts.map((account) => (
+              <Checkbox
+                key={account.id}
+                label={account.nickname}
+                checked={exportAccountIds.includes(account.id)}
+                onChange={(event) => toggleExportAccount(account.id, event.target.checked)}
+              />
+            ))}
+          </div>
+        </div>
+        <Button type="button" leftIcon={<Download size={16} />} onClick={exportTransactions} disabled={exportAccountIds.length === 0}>Export CSV</Button>
       </div>
 
       <div className="tabs">
@@ -146,7 +206,7 @@ export function ReportsPage() {
       {tab === 'cashFlow' && <CashFlowSection loading={loading} cashFlow={cashFlow} netWorth={netWorth} />}
       {tab === 'categories' && <BreakdownSection loading={loading} categories={categories} tags={tags} business={business} />}
       {tab === 'reconciliation' && <ReconciliationSection from={from} to={to} />}
-      {tab === 'exports' && <ExportsSection exports={exports} loading={loading} />}
+      {tab === 'exports' && <ExportsSection exports={exports} loading={loading} onDownload={downloadStoredExport} />}
     </section>
   );
 }
@@ -294,13 +354,13 @@ function ReconciliationSection({ from, to }: { from: string; to: string }) {
   );
 }
 
-function ExportsSection({ exports, loading }: { exports: ExportFileDto[]; loading: boolean }) {
+function ExportsSection({ exports, loading, onDownload }: { exports: ExportFileDto[]; loading: boolean; onDownload: (file: ExportFileDto) => void }) {
   const columns: TableColumn<ExportFileDto>[] = [
     { key: 'fileName', label: 'File' },
     { key: 'exportType', label: 'Type', render: (item) => displayEnum(item.exportType) },
     { key: 'createdAt', label: 'Created', render: (item) => formatDate(item.createdAt) },
     { key: 'sizeBytes', label: 'Size', align: 'right', render: (item) => `${Math.ceil(item.sizeBytes / 1024)} KB` },
-    { key: 'actions', label: '', align: 'right', render: (item) => <a className="table-resource-link" href={item.downloadUrl}>Download</a> },
+    { key: 'actions', label: '', align: 'right', render: (item) => <Button type="button" size="sm" variant="secondary" leftIcon={<Download size={14} />} onClick={() => onDownload(item)}>Download</Button> },
   ];
   return (
     <div className="panel">

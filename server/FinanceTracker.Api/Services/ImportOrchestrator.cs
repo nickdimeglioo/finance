@@ -111,15 +111,16 @@ public sealed class ImportOrchestrator
             var preview = await BuildPreviewAsync(account.Id, classifiedRows, existingUniqueIds, seenUniqueIds, cancellationToken);
             if (!isDryRun && request.AcceptedRowNumbers is not null)
             {
-                var acceptedRows = request.AcceptedRowNumbers.ToHashSet();
+                var requestedAcceptedRows = request.AcceptedRowNumbers.ToHashSet();
                 preview = preview
-                    .Select(row => row with { Accepted = row.Accepted && acceptedRows.Contains(row.RowNumber) })
+                    .Select(row => row with { Accepted = requestedAcceptedRows.Contains(row.RowNumber) && row.Errors.Count == 0 })
                     .ToList();
             }
 
+            var committedRows = 0;
             if (!isDryRun)
             {
-                await CommitAsync(account, ruleset, classifiedRows, preview, cancellationToken);
+                committedRows = await CommitAsync(account, ruleset, classifiedRows, preview, cancellationToken);
                 try
                 {
                     await _recurringRules.MatchTransactionsAsync(cancellationToken);
@@ -131,9 +132,10 @@ public sealed class ImportOrchestrator
             }
 
             var allErrors = parsed.Errors.Concat(preview.SelectMany(row => row.Errors)).ToList();
+            var acceptedRows = preview.Count(row => row.Accepted);
             job.TotalRows = parsed.Rows.Count;
-            job.SuccessRows = preview.Count(row => row.Accepted);
-            job.SkippedRows = preview.Count(row => row.IsDuplicate || !row.Accepted);
+            job.SuccessRows = isDryRun ? acceptedRows : committedRows;
+            job.SkippedRows = preview.Count(row => !row.Accepted) + (isDryRun ? 0 : acceptedRows - committedRows);
             job.ErrorRows = preview.Count(row => row.Errors.Count > 0) + parsed.Errors.Count;
             job.Errors = RulesetJson.Write(allErrors);
             job.Status = "complete";
@@ -154,7 +156,7 @@ public sealed class ImportOrchestrator
         }
     }
 
-    private async Task CommitAsync(
+    private async Task<int> CommitAsync(
         Account account,
         Ruleset ruleset,
         IReadOnlyList<ClassifiedRulesetTransaction> classifiedRows,
@@ -169,16 +171,22 @@ public sealed class ImportOrchestrator
             var existingUniqueIds = await _deduplication.LoadExistingUniqueIdsAsync(account.Id, transaction, cancellationToken);
             var acceptedPreviewByRow = preview.Where(row => row.Accepted).ToDictionary(row => row.RowNumber);
             var now = DateTimeOffset.UtcNow;
+            var imported = 0;
 
             foreach (var classified in classifiedRows)
             {
-                if (!acceptedPreviewByRow.ContainsKey(classified.Mapped.RowNumber)
+                if (!acceptedPreviewByRow.TryGetValue(classified.Mapped.RowNumber, out var previewRow)
                     || string.IsNullOrWhiteSpace(classified.Mapped.UniqueId)
-                    || existingUniqueIds.Contains(classified.Mapped.UniqueId)
                     || classified.Mapped.Date is null
                     || classified.Mapped.Amount is null
                     || string.IsNullOrWhiteSpace(classified.Mapped.Type)
                     || string.IsNullOrWhiteSpace(classified.Mapped.Description))
+                {
+                    continue;
+                }
+
+                var commitUniqueId = ResolveCommitUniqueId(classified.Mapped.UniqueId, previewRow, existingUniqueIds);
+                if (commitUniqueId is null)
                 {
                     continue;
                 }
@@ -200,8 +208,8 @@ public sealed class ImportOrchestrator
                     Direction = DirectionForType(classified.Mapped.Type),
                     Status = "posted",
                     Source = "import",
-                    ImportHash = BuildHash(account.Id, classified.Mapped.UniqueId),
-                    UniqueId = classified.Mapped.UniqueId,
+                    ImportHash = BuildHash(account.Id, commitUniqueId),
+                    UniqueId = commitUniqueId,
                     RulesetId = ruleset.Id,
                     RulesetVersion = ruleset.Version,
                     MatchedClassificationRuleId = classified.MatchedRuleIds.FirstOrDefault(),
@@ -228,10 +236,12 @@ public sealed class ImportOrchestrator
                 {
                     await _tags.AssignTagsByNameAsync(entity, classified.Tags, transaction, cancellationToken);
                 }
-                existingUniqueIds.Add(classified.Mapped.UniqueId);
+                existingUniqueIds.Add(commitUniqueId);
+                imported++;
             }
 
             await transaction.CommitAsync();
+            return imported;
         }
         catch
         {
@@ -442,5 +452,24 @@ public sealed class ImportOrchestrator
     private static string BuildHash(Guid accountId, string uniqueId)
     {
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{accountId:N}|{uniqueId}"))).ToLowerInvariant();
+    }
+
+    private static string? ResolveCommitUniqueId(
+        string baseUniqueId,
+        RulesetImportPreviewRowDto previewRow,
+        HashSet<string> existingUniqueIds)
+    {
+        if (!existingUniqueIds.Contains(baseUniqueId))
+        {
+            return baseUniqueId;
+        }
+
+        if (!previewRow.IsDuplicate)
+        {
+            return null;
+        }
+
+        var overrideUniqueId = $"{baseUniqueId}|duplicate-row:{previewRow.RowNumber}";
+        return existingUniqueIds.Contains(overrideUniqueId) ? null : overrideUniqueId;
     }
 }

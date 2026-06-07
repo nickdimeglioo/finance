@@ -360,6 +360,7 @@ export interface ExportRequest {
   from?: string | null;
   to?: string | null;
   accountId?: string | null;
+  accountIds?: string[] | null;
   classification?: string | null;
 }
 

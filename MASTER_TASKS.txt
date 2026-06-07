@@ -166,3 +166,13 @@ Pass 14 Account Link Review
 ---------------------------
 FT-P14-0001 - Replace transfer candidate linking with account-linked payment review, done in pass 14 Account Link Review
 FT-P14-0002 - Compute credit-card payment allocation from linked account review, done in pass 14 Account Link Review
+
+Pass 15 Duplicate Import Overrides
+----------------------------------
+FT-P15-0001 - Allow duplicate import preview rows to be explicitly included, done in pass 15 Duplicate Import Overrides
+FT-P15-0002 - Use deterministic unique ids for accepted duplicate imports, done in pass 15 Duplicate Import Overrides
+
+Pass 16 Export Account Downloads
+--------------------------------
+FT-P16-0001 - Filter transaction CSV exports by selected accounts, done in pass 16 Export Account Downloads
+FT-P16-0002 - Download exports through frontend blob handling, done in pass 16 Export Account Downloads

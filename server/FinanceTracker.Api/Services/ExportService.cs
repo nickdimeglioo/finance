@@ -23,8 +23,13 @@ public sealed class ExportService
 
     public async Task<ExportFileDto> CreateTransactionsExportAsync(ExportRequest request, CancellationToken cancellationToken)
     {
+        var accountIds = new HashSet<Guid>(request.AccountIds ?? []);
+        if (request.AccountId is Guid accountId)
+        {
+            accountIds.Add(accountId);
+        }
         var transactions = (await _reports.LoadTransactionsAsync(request.From, request.To, cancellationToken))
-            .Where(transaction => request.AccountId is null || transaction.AccountId == request.AccountId)
+            .Where(transaction => accountIds.Count == 0 || accountIds.Contains(transaction.AccountId))
             .Where(transaction => string.IsNullOrWhiteSpace(request.Classification) || transaction.Classification == request.Classification)
             .OrderBy(transaction => transaction.Date)
             .ThenBy(transaction => transaction.CreatedAt)
@@ -136,4 +141,3 @@ internal static class CsvStringBuilderExtensions
         return builder;
     }
 }
-
