@@ -19,3 +19,5 @@ databaseChangeLog:
       file: changelog/008-classification-values.sql
   - include:
       file: changelog/009-transfer-link-suggestions.sql
+  - include:
+      file: changelog/010-budgets-attachments.sql

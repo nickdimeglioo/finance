@@ -1,7 +1,9 @@
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
-import { BarChart3, Bell, FileArchive, FileUp, Home, Landmark, Lightbulb, NotebookPen, Repeat, Settings, Tags, WalletCards } from 'lucide-react';
+import { BarChart3, Bell, FileArchive, FileUp, Goal, Home, Landmark, Lightbulb, NotebookPen, Paperclip, Repeat, Settings, Tags, WalletCards } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { AccountsPage } from './pages/AccountsPage';
+import { AttachmentsPage } from './pages/AttachmentsPage';
+import { BudgetGoalsPage } from './pages/BudgetGoalsPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ImportsPage } from './pages/ImportsPage';
 import { GuidancePage } from './pages/GuidancePage';
@@ -21,7 +23,9 @@ const navItems = [
   { to: '/transactions', label: 'Transactions', icon: WalletCards },
   { to: '/imports', label: 'Imports', icon: FileUp },
   { to: '/storage', label: 'Storage', icon: FileArchive },
+  { to: '/attachments', label: 'Attachments', icon: Paperclip },
   { to: '/subscriptions', label: 'Subscriptions', icon: Repeat },
+  { to: '/budget-goals', label: 'Budgets', icon: Goal },
   { to: '/tags', label: 'Tags', icon: Tags },
   { to: '/notes', label: 'Notes', icon: NotebookPen },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
@@ -62,7 +66,9 @@ function App() {
           <Route path="/imports" element={<ImportsPage />} />
           <Route path="/imports/rulesets/:rulesetId" element={<RulesetPage />} />
           <Route path="/storage" element={<StoragePage />} />
+          <Route path="/attachments" element={<AttachmentsPage />} />
           <Route path="/subscriptions" element={<SubscriptionsPage />} />
+          <Route path="/budget-goals" element={<BudgetGoalsPage />} />
           <Route path="/tags" element={<TagsPage />} />
           <Route path="/notes" element={<NotesPage />} />
           <Route path="/reports" element={<ReportsPage />} />

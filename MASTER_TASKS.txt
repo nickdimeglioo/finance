@@ -176,3 +176,10 @@ Pass 16 Export Account Downloads
 --------------------------------
 FT-P16-0001 - Filter transaction CSV exports by selected accounts, done in pass 16 Export Account Downloads
 FT-P16-0002 - Download exports through frontend blob handling, done in pass 16 Export Account Downloads
+
+Pass 17 Budgets Attachments
+---------------------------
+FT-P17-0001 - Build budget and goal tracking, done in pass 17 Budgets Attachments
+FT-P17-0002 - Build receipt attachment workflow, done in pass 17 Budgets Attachments
+FT-P17-0003 - Add transaction receipt matching and viewing, done in pass 17 Budgets Attachments
+FT-P17-0004 - Stop recurring rule dashboard reminders, done in pass 17 Budgets Attachments

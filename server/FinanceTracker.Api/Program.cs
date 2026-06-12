@@ -59,6 +59,8 @@ builder.Services.AddScoped<TagService>();
 builder.Services.AddScoped<RecurringRuleService>();
 builder.Services.AddScoped<NoteService>();
 builder.Services.AddScoped<ReminderService>();
+builder.Services.AddScoped<BudgetGoalService>();
+builder.Services.AddScoped<ReceiptAttachmentService>();
 builder.Services.AddHostedService<ReminderWorker>();
 
 OrmConfiguration.AddType<Enum>(new EnumHandler());

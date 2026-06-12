@@ -13,7 +13,12 @@ public sealed class ReminderService
     {
         await GenerateForUserAsync(_currentUser.UserId);
         var reminders = await _db.QuerySelect<Reminder>().From<Reminder>().SelectAllFrom<Reminder>().Where(reminder => reminder.UserId == _currentUser.UserId).ToListAsync();
-        return reminders.Where(reminder => includeResolved || reminder.Status == "pending").OrderBy(reminder => reminder.DueOn).Select(ToDto).ToList();
+        return reminders
+            .Where(reminder => reminder.Type != "recurring_rule")
+            .Where(reminder => includeResolved || reminder.Status == "pending")
+            .OrderBy(reminder => reminder.DueOn)
+            .Select(ToDto)
+            .ToList();
     }
 
     public async Task<ReminderDto?> SetStatusAsync(Guid id, string status, CancellationToken cancellationToken)
@@ -25,8 +30,7 @@ public sealed class ReminderService
 
     internal async Task GenerateAllDueAsync(CancellationToken cancellationToken)
     {
-        var userIds = (await _db.QuerySelect<FinanceNote>().From<FinanceNote>().SelectAllFrom<FinanceNote>().ToListAsync()).Select(note => note.UserId)
-            .Concat((await _db.QuerySelect<RecurringRule>().From<RecurringRule>().SelectAllFrom<RecurringRule>().ToListAsync()).Select(rule => rule.UserId)).Distinct();
+        var userIds = (await _db.QuerySelect<FinanceNote>().From<FinanceNote>().SelectAllFrom<FinanceNote>().ToListAsync()).Select(note => note.UserId).Distinct();
         foreach (var userId in userIds) await GenerateForUserAsync(userId);
     }
 
@@ -37,9 +41,6 @@ public sealed class ReminderService
         var notes = await _db.QuerySelect<FinanceNote>().From<FinanceNote>().SelectAllFrom<FinanceNote>().Where(note => note.UserId == userId && note.Status == "unmatched").ToListAsync();
         foreach (var note in notes.Where(note => note.RemindOn.HasValue && note.RemindOn <= today))
             if (!existing.Any(item => item.Type == "note" && item.SourceId == note.Id)) await _db.SaveAsync(new Reminder { UserId = userId, Type = "note", SourceId = note.Id, Title = note.Title, Message = note.Body, DueOn = note.RemindOn!.Value, Status = "pending", CreatedAt = now, UpdatedAt = now });
-        var rules = await _db.QuerySelect<RecurringRule>().From<RecurringRule>().SelectAllFrom<RecurringRule>().Where(rule => rule.UserId == userId && rule.IsActive == true).ToListAsync();
-        foreach (var rule in rules.Where(rule => rule.NextExpected < today))
-            if (!existing.Any(item => item.Type == "recurring_rule" && item.SourceId == rule.Id)) await _db.SaveAsync(new Reminder { UserId = userId, Type = "recurring_rule", SourceId = rule.Id, Title = $"Overdue: {rule.Name}", Message = $"Expected {rule.Amount:0.00} {rule.Currency}", DueOn = rule.NextExpected, Status = "pending", CreatedAt = now, UpdatedAt = now });
     }
 
     private static ReminderDto ToDto(Reminder item) => new(item.Id, item.Type, item.SourceId, item.Title, item.Message, item.DueOn, item.Status, item.CreatedAt, item.UpdatedAt);

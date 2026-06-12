@@ -322,6 +322,77 @@ export interface ReminderDto {
   updatedAt: string;
 }
 
+export type BudgetGoalKind = 'budget' | 'goal';
+
+export interface BudgetGoalDto {
+  id: string;
+  name: string;
+  kind: BudgetGoalKind;
+  accountId?: string | null;
+  category?: string | null;
+  classification?: TransactionClassification | null;
+  tagNames: string[];
+  startsOn: string;
+  endsOn: string;
+  targetAmount: number;
+  currency: string;
+  includeSplits: boolean;
+  isActive: boolean;
+  currentAmount: number;
+  remainingAmount: number;
+  percentComplete: number;
+  status: 'on_track' | 'near_limit' | 'over_limit' | 'met' | 'in_progress' | 'no_progress';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertBudgetGoalRequest {
+  name: string;
+  kind: BudgetGoalKind;
+  accountId?: string | null;
+  category?: string | null;
+  classification?: TransactionClassification | null;
+  tagNames?: string[] | null;
+  startsOn: string;
+  endsOn: string;
+  targetAmount: number;
+  currency: string;
+  includeSplits: boolean;
+  isActive: boolean;
+}
+
+export interface ReceiptAttachmentDto {
+  id: string;
+  transactionId?: string | null;
+  title: string;
+  notes?: string | null;
+  originalFileName: string;
+  storedFileName: string;
+  contentType: string;
+  sizeBytes: number;
+  amountHint?: number | null;
+  merchantHint?: string | null;
+  dateHint?: string | null;
+  status: 'unmatched' | 'matched' | 'dismissed';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdateReceiptAttachmentRequest {
+  title: string;
+  notes?: string | null;
+  amountHint?: number | null;
+  merchantHint?: string | null;
+  dateHint?: string | null;
+  transactionId?: string | null;
+}
+
+export interface ReceiptMatchSuggestionDto {
+  receipt: ReceiptAttachmentDto;
+  score: number;
+  reasons: string[];
+}
+
 export interface CashFlowPointDto {
   month: string;
   income: number;

@@ -52,4 +52,7 @@ exports/
 liquibase.local.properties
 *.log
 
+
+ignore/
+
 /task-tracker/__pycache__/*

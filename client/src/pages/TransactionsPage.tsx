@@ -1,12 +1,13 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Ban, ChevronLeft, ChevronRight, CreditCard, FilterX, Link2, Save, Tags } from 'lucide-react';
+import { Ban, ChevronLeft, ChevronRight, CreditCard, FileDown, FilterX, Link2, Paperclip, Save, Tags } from 'lucide-react';
 import { Button, Checkbox, EmptyState, Input, Select, StatusBadge, Table, type TableColumn } from '../components/ui';
 import { displayEnum } from '../lib/display';
 import { formatDate, formatMoney, toApiDate } from '../lib/financeFormat';
 import { useAccounts } from '../services/accountsService';
 import { acceptNoteMatch, findNoteMatches, listTags } from '../services/organizationService';
+import { acceptReceiptMatch, findReceiptMatches, listReceipts, receiptDownloadUrl } from '../services/receiptService';
 import { createTransaction, createTransfer, getCreditCardPaymentDrilldown, replaceTransactionTags, updateTransactionStatus, useTransactions, voidTransaction } from '../services/transactionsService';
-import type { CreateTransactionRequest, CreateTransferRequest, CreditCardPaymentDrilldownDto, NoteMatchSuggestionDto, TagDto, TransactionClassification, TransactionFiltersRequest, TransactionListItemDto, TransactionStatus, TransactionType } from '../types/schema';
+import type { CreateTransactionRequest, CreateTransferRequest, CreditCardPaymentDrilldownDto, NoteMatchSuggestionDto, ReceiptAttachmentDto, ReceiptMatchSuggestionDto, TagDto, TransactionClassification, TransactionFiltersRequest, TransactionListItemDto, TransactionStatus, TransactionType } from '../types/schema';
 
 const types: TransactionType[] = ['expense', 'income', 'adjustment'];
 const classifications: TransactionClassification[] = ['personal', 'business', 'transfer', 'investment', 'tax', 'reimbursement', 'exclude', 'mixed', 'ignored', 'unknown'];
@@ -33,10 +34,13 @@ export function TransactionsPage() {
   const [tags, setTags] = useState<TagDto[]>([]);
   const [newTagIds, setNewTagIds] = useState<string[]>([]);
   const [selectedTransaction, setSelectedTransaction] = useState<TransactionListItemDto | null>(null);
+  const [receiptTransaction, setReceiptTransaction] = useState<TransactionListItemDto | null>(null);
   const [drilldownTransaction, setDrilldownTransaction] = useState<TransactionListItemDto | null>(null);
   const [drilldown, setDrilldown] = useState<CreditCardPaymentDrilldownDto | null>(null);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [noteMatches, setNoteMatches] = useState<NoteMatchSuggestionDto[]>([]);
+  const [transactionReceipts, setTransactionReceipts] = useState<ReceiptAttachmentDto[]>([]);
+  const [receiptMatches, setReceiptMatches] = useState<ReceiptMatchSuggestionDto[]>([]);
   const [mode, setMode] = useState<'transaction' | 'transfer'>('transaction');
   const [message, setMessage] = useState<string | null>(null);
   const [transaction, setTransaction] = useState<CreateTransactionRequest>({
@@ -116,6 +120,27 @@ export function TransactionsPage() {
     try { setNoteMatches(await findNoteMatches(item.id)); } catch (err) { setMessage(err instanceof Error ? err.message : 'Unable to find note matches.'); }
   }
 
+  async function openReceipts(item: TransactionListItemDto) {
+    setReceiptTransaction(item);
+    setReceiptMatches([]);
+    try {
+      setTransactionReceipts(await listReceipts(undefined, item.id));
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Unable to load receipts.');
+    }
+  }
+
+  async function findReceiptCandidates(item: TransactionListItemDto) {
+    setReceiptTransaction(item);
+    try {
+      const [matched, candidates] = await Promise.all([listReceipts(undefined, item.id), findReceiptMatches(item.id)]);
+      setTransactionReceipts(matched);
+      setReceiptMatches(candidates);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Unable to find receipt matches.');
+    }
+  }
+
   async function openDrilldown(item: TransactionListItemDto) {
     setDrilldownTransaction(item);
     try {
@@ -139,6 +164,7 @@ export function TransactionsPage() {
     { key: 'actions', label: '', width: 230, align: 'right', render: (item) => <div className="row-actions">
       <Button type="button" variant="secondary" size="sm" leftIcon={<Tags size={14} />} onClick={() => openTags(item)}>Tags</Button>
       <Button type="button" variant="secondary" size="sm" leftIcon={<Link2 size={14} />} onClick={() => findMatches(item)}>Notes</Button>
+      <Button type="button" variant="secondary" size="sm" leftIcon={<Paperclip size={14} />} onClick={() => openReceipts(item)}>Receipts</Button>
       {canReviewPayment(item, accounts.find((account) => account.id === item.accountId)?.type) && <Button type="button" variant="secondary" size="sm" leftIcon={<CreditCard size={14} />} onClick={() => openDrilldown(item)}>Review</Button>}
       {!item.isVoid ? <Button type="button" variant="secondary" size="sm" leftIcon={<Ban size={15} />} onClick={async () => { await voidTransaction(item.id, item.type === 'transfer'); await reload(); }}>Void</Button> : <StatusBadge label="Voided" tone="danger" />}
     </div> },
@@ -173,6 +199,20 @@ export function TransactionsPage() {
       </div>
       {noteMatches.length > 0 && <div className="match-list">{noteMatches.map((match) => <div className="match-card" key={match.note.id}><div><strong>{match.note.title}</strong><div className="muted">Score {match.score}: {match.reasons.join(', ')}</div></div><Button type="button" size="sm" onClick={async () => { await acceptNoteMatch(match.note.id, selectedTransaction.id); setNoteMatches(noteMatches.filter((item) => item.note.id !== match.note.id)); }}>Match</Button></div>)}</div>}
       {noteMatches.length === 0 && <p className="muted">Use Find Note Matches to score unmatched notes for this transaction.</p>}
+    </div>}
+
+    {receiptTransaction && <div className="panel">
+      <div className="panel-header"><h2>Receipts: {receiptTransaction.description}</h2><Button type="button" variant="secondary" size="sm" onClick={() => { setReceiptTransaction(null); setTransactionReceipts([]); setReceiptMatches([]); }}>Close</Button></div>
+      <div className="row-actions organize-actions">
+        <Button type="button" variant="secondary" leftIcon={<Paperclip size={14} />} onClick={() => findReceiptCandidates(receiptTransaction)}>Find Receipt Matches</Button>
+      </div>
+      {transactionReceipts.length > 0 && <div className="match-list">{transactionReceipts.map((receipt) => <div className="match-card" key={receipt.id}><div><strong>{receipt.title}</strong><div className="muted">{receipt.originalFileName}</div></div><a className="table-resource-link" href={receiptDownloadUrl(receipt.id)}><FileDown size={14} />View</a></div>)}</div>}
+      {transactionReceipts.length === 0 && <p className="muted">No receipts are matched to this transaction yet.</p>}
+      {receiptMatches.length > 0 && <>
+        <h3 className="panel-subtitle">Suggested Matches</h3>
+        <div className="match-list">{receiptMatches.map((match) => <div className="match-card" key={match.receipt.id}><div><strong>{match.receipt.title}</strong><div className="muted">Score {match.score}: {match.reasons.join(', ')}</div></div><Button type="button" size="sm" onClick={async () => { const matched = await acceptReceiptMatch(match.receipt.id, receiptTransaction.id); setTransactionReceipts([...transactionReceipts, matched]); setReceiptMatches(receiptMatches.filter((item) => item.receipt.id !== match.receipt.id)); }}>Match</Button></div>)}</div>
+      </>}
+      {receiptMatches.length === 0 && <p className="muted">Use Find Receipt Matches to score unmatched uploaded receipts for this transaction.</p>}
     </div>}
 
     {drilldownTransaction && <div className="panel">

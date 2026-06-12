@@ -350,6 +350,27 @@ textarea {
   align-items: center;
 }
 
+.progress-cell {
+  display: grid;
+  grid-template-columns: minmax(72px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 130px;
+}
+
+.progress-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--pm-border);
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--pm-accent);
+}
+
 .table-input {
   width: 112px;
   min-height: 24px;
